@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Referee from '../../referee/Referee';
 import Tile from '../Tile/Tile';
 import './Chessboard.css';
@@ -78,34 +78,69 @@ rows.forEach(({ y, start, step, image, team }) => {
 });
 
 export default function Chessboard() {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [activePiece, setActivePiece] = useState<HTMLElement | null>(null);
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [gridX, setGridX] = useState(0);
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [gridY, setGridY] = useState(0);
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     const [pieces, setPieces] = useState<Piece[]>(initialBoardState);
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [currentTeam, setCurrentTeam] = useState<TeamType>(TeamType.OUR);
+    const [mandatoryCaptures, setMandatoryCaptures] = useState<
+        { x: number; y: number }[]
+    >([]);
+    const [isMultipleCapture, setIsMultipleCapture] = useState(false);
+    const [lastMovedPiece, setLastMovedPiece] = useState<Piece | null>(null);
+
     const chessboardRef = useRef<HTMLDivElement>(null);
     const referee = new Referee();
+
+    useEffect(() => {
+        if (!isMultipleCapture) {
+            const captures = referee.findAllMandatoryCaptures(
+                pieces,
+                currentTeam
+            );
+            setMandatoryCaptures(captures);
+        }
+    }, [currentTeam, pieces, isMultipleCapture]);
 
     function grabPiece(e: React.MouseEvent) {
         const element = e.target as HTMLElement;
         const chessboard = chessboardRef.current;
 
         if (element.classList.contains('chess-piece') && chessboard) {
-            setGridX(Math.floor((e.clientX - chessboard.offsetLeft) / 100));
-            setGridY(
-                Math.abs(
-                    Math.ceil((e.clientY - chessboard.offsetTop - 800) / 100)
-                )
+            const x = Math.floor((e.clientX - chessboard.offsetLeft) / 100);
+            const y = Math.abs(
+                Math.ceil((e.clientY - chessboard.offsetTop - 800) / 100)
             );
-            const x = e.clientX - 50;
-            const y = e.clientY - 50;
+
+            const piece = pieces.find((p) => p.x === x && p.y === y);
+
+            if (piece?.team !== currentTeam) {
+                return;
+            }
+
+            if (mandatoryCaptures.length > 0) {
+                const isMandatoryPiece = mandatoryCaptures.some(
+                    (pos) => pos.x === x && pos.y === y
+                );
+                if (!isMandatoryPiece) {
+                    return;
+                }
+            }
+
+            if (isMultipleCapture && lastMovedPiece) {
+                if (x !== lastMovedPiece.x || y !== lastMovedPiece.y) {
+                    return;
+                }
+            }
+
+            setGridX(x);
+            setGridY(y);
+
+            const mouseX = e.clientX - 50;
+            const mouseY = e.clientY - 50;
             element.style.position = 'absolute';
-            element.style.left = `${x}px`;
-            element.style.top = `${y}px`;
+            element.style.left = `${mouseX}px`;
+            element.style.top = `${mouseY}px`;
             setActivePiece(element);
         }
     }
@@ -139,7 +174,6 @@ export default function Chessboard() {
         }
     }
 
-
     function dropPiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
         if (activePiece && chessboard) {
@@ -151,9 +185,9 @@ export default function Chessboard() {
             const currentPiece = pieces.find(
                 (p) => p.x === gridX && p.y === gridY
             );
-            const attackedPiece = pieces.find((p) => p.x === x && p.y === y);
 
             if (currentPiece) {
+                let wasCapture = false;
                 const validMove = referee.isValidMove(
                     gridX,
                     gridY,
@@ -161,39 +195,60 @@ export default function Chessboard() {
                     y,
                     currentPiece.type,
                     currentPiece.team,
-                    pieces
+                    pieces,
+                    (midX, midY) => {
+                        wasCapture = true;
+                        setPieces((prevPieces) =>
+                            prevPieces.filter(
+                                (p) => !(p.x === midX && p.y === midY)
+                            )
+                        );
+                    }
                 );
+
                 if (validMove) {
-                    //updated the piece position
-                    //and if a apiece is aatacked remows it
+                    setPieces((prevPieces) => {
+                        const updatedPieces = prevPieces.map((piece) => {
+                            if (
+                                piece.x === currentPiece.x &&
+                                piece.y === currentPiece.y
+                            ) {
+                                return { ...piece, x, y };
+                            }
+                            return piece;
+                        });
+                        return referee.updatePiecesAfterMove(updatedPieces);
+                    });
 
-                    const updatedPieces = pieces.reduce((results, piece) => {
-                        if (
-                            piece.x === currentPiece.x &&
-                            piece.y === currentPiece.y
-                        ) {
-                            piece.x = x;
-                            piece.y = y;
-                            results.push(piece);
-                        } else if (!(piece.x === x && piece.y === y)) {
-                            results.push(piece);
+                    if (wasCapture) {
+                        const additionalCaptures = referee.hasMoreCaptures(
+                            x,
+                            y,
+                            currentPiece.team,
+                            pieces
+                        );
+                        if (additionalCaptures) {
+                            setIsMultipleCapture(true);
+                            setMandatoryCaptures([{ x, y }]); // Only allow the current piece to move
+                            return; // Do not switch turns yet
                         }
-                        return results;
-                    }, [] as Piece[]);
+                    }
 
-                    setPieces(updatedPieces);
-
-                } else {
-                    // RESETs the piece position
-                    activePiece.style.position = 'relative';
-                    activePiece.style.removeProperty('top');
-                    activePiece.style.removeProperty('left');
+                    // Reset states if no additional captures are possible
+                    setIsMultipleCapture(false);
+                    setMandatoryCaptures([]);
+                    setCurrentTeam((prevTeam) =>
+                        prevTeam === TeamType.OUR
+                            ? TeamType.OPPONENT
+                            : TeamType.OUR
+                    );
+                    setLastMovedPiece(null);
                 }
             }
-            // activePiece.style.position = '';
-            // activePiece.style.left = '';
-            // activePiece.style.top = '';
 
+            activePiece.style.position = 'relative';
+            activePiece.style.removeProperty('top');
+            activePiece.style.removeProperty('left');
             setActivePiece(null);
         }
     }
@@ -204,27 +259,41 @@ export default function Chessboard() {
         for (let i = 0; i < horizontalAxis.length; i++) {
             const number = j + i + 2;
             let image = undefined;
+            const isHighlighted = mandatoryCaptures.some(
+                (pos) => pos.x === i && pos.y === j
+            );
 
             pieces.forEach((p) => {
                 if (p.x === i && p.y === j) {
                     image = p.image;
                 }
             });
+
             board.push(
-                <Tile key={`${j},${i}`} image={image} number={number} />
+                <Tile
+                    key={`${j},${i}`}
+                    image={image}
+                    number={number}
+                    isHighlighted={isHighlighted}
+                />
             );
         }
     }
 
     return (
-        <div
-            onMouseMove={(e) => movePiece(e)}
-            onMouseDown={(e) => grabPiece(e)}
-            onMouseUp={(e) => dropPiece(e)}
-            id="chessboard"
-            ref={chessboardRef}
-        >
-            {board}
-        </div>
+        <>
+            <div className="game-info">
+                Turn: {currentTeam === TeamType.OUR ? 'Green' : 'Red'}
+            </div>
+            <div
+                onMouseMove={(e) => movePiece(e)}
+                onMouseDown={(e) => grabPiece(e)}
+                onMouseUp={(e) => dropPiece(e)}
+                id="chessboard"
+                ref={chessboardRef}
+            >
+                {board}
+            </div>
+        </>
     );
 }
