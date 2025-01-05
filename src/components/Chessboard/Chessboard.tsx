@@ -77,6 +77,7 @@ rows.forEach(({ y, start, step, image, team }) => {
     }
 });
 
+
 export default function Chessboard() {
     const [activePiece, setActivePiece] = useState<HTMLElement | null>(null);
     const [gridX, setGridX] = useState(0);
@@ -101,6 +102,8 @@ export default function Chessboard() {
             setMandatoryCaptures(captures);
         }
     }, [currentTeam, pieces, isMultipleCapture]);
+
+
 
     function grabPiece(e: React.MouseEvent) {
         const element = e.target as HTMLElement;
@@ -138,6 +141,7 @@ export default function Chessboard() {
 
             const mouseX = e.clientX - 50;
             const mouseY = e.clientY - 50;
+            element.style.zIndex = '100';
             element.style.position = 'absolute';
             element.style.left = `${mouseX}px`;
             element.style.top = `${mouseY}px`;
@@ -154,6 +158,7 @@ export default function Chessboard() {
             const maxY = chessboard.offsetTop + chessboard.clientHeight - 100;
             const x = e.clientX - 50;
             const y = e.clientY - 50;
+            activePiece.style.zIndex = '100';
             activePiece.style.position = 'absolute';
 
             if (x < minX) {
@@ -174,6 +179,40 @@ export default function Chessboard() {
         }
     }
 
+
+    function handleTouchStart(e: React.TouchEvent) {
+
+        const touch = e.touches[0]; // Беремо перший елемент із дотиків
+        const mouseEvent = {
+            clientX: touch.clientX, // Координати дотику
+            clientY: touch.clientY,
+            target: e.target,
+        } as unknown as React.MouseEvent;
+        grabPiece(mouseEvent);
+    }
+
+    function handleTouchMove(e: React.TouchEvent) {
+
+        const touch = e.touches[0];
+        const mouseEvent = {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            target: e.target,
+        } as unknown as React.MouseEvent;
+        movePiece(mouseEvent);
+    }
+
+    function handleTouchEnd(e: React.TouchEvent) {
+
+        const touch = e.changedTouches[0]; // Визначаємо останнє положення дотику
+        const mouseEvent = {
+            clientX: touch.clientX, // Отримуємо фінальні координати
+            clientY: touch.clientY,
+            target: e.target,
+        } as unknown as React.MouseEvent;
+        dropPiece(mouseEvent);
+    }
+
     function dropPiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
         if (activePiece && chessboard) {
@@ -188,6 +227,9 @@ export default function Chessboard() {
 
             if (currentPiece) {
                 let wasCapture = false;
+                let updatedPieces = [...pieces];
+
+                // Виконуємо перевірку на валідність ходу
                 const validMove = referee.isValidMove(
                     gridX,
                     gridY,
@@ -198,54 +240,55 @@ export default function Chessboard() {
                     pieces,
                     (midX, midY) => {
                         wasCapture = true;
-                        setPieces((prevPieces) =>
-                            prevPieces.filter(
-                                (p) => !(p.x === midX && p.y === midY)
-                            )
-                        );
+                        updatedPieces = pieces.filter((p) => !(p.x === midX && p.y === midY));
                     }
                 );
 
                 if (validMove) {
-                    setPieces((prevPieces) => {
-                        const updatedPieces = prevPieces.map((piece) => {
-                            if (
-                                piece.x === currentPiece.x &&
-                                piece.y === currentPiece.y
-                            ) {
-                                return { ...piece, x, y };
-                            }
-                            return piece;
-                        });
-                        return referee.updatePiecesAfterMove(updatedPieces);
+                    // Оновлюємо позицію активної фігури
+                    updatedPieces = updatedPieces.map((piece) => {
+                        if (piece.x === currentPiece.x && piece.y === currentPiece.y) {
+                            return { ...piece, x, y };
+                        }
+                        return piece;
                     });
 
+                    // Застосовуємо додатковий рефакторинг
+                    updatedPieces = referee.updatePiecesAfterMove(updatedPieces);
+
+                    // Оновлюємо стан
+                    setPieces(updatedPieces);
+
                     if (wasCapture) {
+                        // Перевірка на можливість додаткового побиття з ОНОВЛЕНИМ станом
                         const additionalCaptures = referee.hasMoreCaptures(
                             x,
                             y,
                             currentPiece.team,
-                            pieces
+                            updatedPieces, // Використовуємо оновлений стан
+                            currentPiece.type
                         );
+
                         if (additionalCaptures) {
                             setIsMultipleCapture(true);
-                            setMandatoryCaptures([{ x, y }]); // Only allow the current piece to move
-                            return; // Do not switch turns yet
+                            setMandatoryCaptures([{ x, y }]);
+                            setLastMovedPiece({ ...currentPiece, x, y });
+                            return;
                         }
                     }
 
-                    // Reset states if no additional captures are possible
+                    // Скидаємо всі стани для наступного ходу
                     setIsMultipleCapture(false);
                     setMandatoryCaptures([]);
                     setCurrentTeam((prevTeam) =>
-                        prevTeam === TeamType.OUR
-                            ? TeamType.OPPONENT
-                            : TeamType.OUR
+                        prevTeam === TeamType.OUR ? TeamType.OPPONENT : TeamType.OUR
                     );
                     setLastMovedPiece(null);
                 }
             }
 
+            // Скидаємо стилі вибраної фігури
+            activePiece.style.zIndex = '1';
             activePiece.style.position = 'relative';
             activePiece.style.removeProperty('top');
             activePiece.style.removeProperty('left');
@@ -289,6 +332,12 @@ export default function Chessboard() {
                 onMouseMove={(e) => movePiece(e)}
                 onMouseDown={(e) => grabPiece(e)}
                 onMouseUp={(e) => dropPiece(e)}
+
+                onTouchStart={(e) => handleTouchStart(e)}
+                onTouchMove={(e) => handleTouchMove(e)}
+                onTouchEnd={(e) => handleTouchEnd(e)}
+
+
                 id="chessboard"
                 ref={chessboardRef}
             >

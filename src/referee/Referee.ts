@@ -30,6 +30,9 @@ export default class Referee {
         boardState: Piece[],
         captureCallback: (midX: number, midY: number) => void
     ): boolean {
+
+
+
         if (type === PieceType.PAWN) {
             const direction = team === TeamType.OUR ? 1 : -1;
 
@@ -57,9 +60,11 @@ export default class Referee {
                 const midX = px + (x - px) / 2;
                 const midY = py + (y - py) / 2;
 
+                // ПЕРЕВІРКА КІНЦЕВОЇ КЛІТИНКИ
                 if (
-                    !this.tileIsOccupied(x, y, boardState) &&
-                    this.tileIsOccupiedByOpponent(midX, midY, boardState, team)
+                    !this.tileIsOccupied(x, y, boardState) && // Клітина повинна бути вільною
+                    !this.tileIsOccupiedByOpponent(x, y, boardState, team) && // Не зайнята ворожою
+                    this.tileIsOccupiedByOpponent(midX, midY, boardState, team) // Можливе захоплення
                 ) {
                     captureCallback(midX, midY);
                     return true;
@@ -71,41 +76,45 @@ export default class Referee {
             const dx = x - px;
             const dy = y - py;
 
-            // Check if move is diagonal
+            // Перевірка на обов’язкові захоплення
+            const mandatoryCaptures = this.findAllMandatoryCaptures(boardState, team);
+            if (mandatoryCaptures.length > 0) {
+                const isCapture = Math.abs(dx) === Math.abs(dy) && Math.abs(dx) > 1; // Тільки захоплення
+                if (!isCapture) {
+                    return false; // Якщо є обов’язкові захоплення, забороняємо звичайний рух
+                }
+            }
+
+            // Дозволено лише діагональний рух
             if (Math.abs(dx) !== Math.abs(dy)) {
                 return false;
             }
 
-            // Check if path is clear
+            // Перевірка, чи шлях вільний
             const stepX = dx > 0 ? 1 : -1;
             const stepY = dy > 0 ? 1 : -1;
             let currentX = px + stepX;
             let currentY = py + stepY;
 
-            let hasCaptured = false;
-            let opponentFound = false;
+            let opponentFound = false; // Слідкуємо, чи знайдено суперника
             let midX = -1;
             let midY = -1;
 
             while (currentX !== x && currentY !== y) {
                 if (this.tileIsOccupied(currentX, currentY, boardState)) {
                     if (
-                        this.tileIsOccupiedByOpponent(
-                            currentX,
-                            currentY,
-                            boardState,
-                            team
-                        )
+                        this.tileIsOccupiedByOpponent(currentX, currentY, boardState, team)
                     ) {
                         if (opponentFound) {
-                            // Already found an opponent, invalid move
+                            // Знайдено зайву фігуру, рух неможливий
                             return false;
                         }
+                        // Помічаємо суперника для потенційного захоплення
                         opponentFound = true;
                         midX = currentX;
                         midY = currentY;
                     } else {
-                        // Path is blocked by own piece
+                        // Шлях заблоковано своєю фігурою
                         return false;
                     }
                 }
@@ -113,11 +122,17 @@ export default class Referee {
                 currentY += stepY;
             }
 
+            // Якщо знайдено суперника — дозволяємо захоплення
             if (opponentFound) {
+                if (this.tileIsOccupiedByOpponent(x, y, boardState, team) || this.tileIsOccupied(x, y, boardState)) {
+                    return false;
+                }
                 captureCallback(midX, midY);
-                return true; // Дозволяємо переміщення після захоплення
+                return true;
             }
-            return true; // Дозволяємо звичайний рух, якщо шлях вільний
+
+            // Дозволяємо звичайний рух лише за відсутності обов'язкових захоплень
+            return mandatoryCaptures.length === 0;
         }
 
         return false;
@@ -128,8 +143,14 @@ export default class Referee {
         x: number,
         y: number,
         team: TeamType,
-        boardState: Piece[]
+        boardState: Piece[],
+        type: PieceType
     ): boolean {
+
+        if (type === PieceType.KING) {
+            return this.hasMoreCapturesKing(x, y, team, boardState);
+        }
+
         const directions = [
             { dx: 2, dy: 2 },
             { dx: 2, dy: -2 },
@@ -148,7 +169,7 @@ export default class Referee {
                 newX < 8 &&
                 newY >= 0 &&
                 newY < 8 &&
-                !this.tileIsOccupied(newX, newY, boardState) &&
+                !this.tileIsOccupied(newX, newY, boardState) && // ПЕРЕВІРКА ВІЛЬНОЇ КІНЦЕВОЇ ПЛИТКИ
                 this.tileIsOccupiedByOpponent(midX, midY, boardState, team)
             ) {
                 return true;
@@ -167,13 +188,61 @@ export default class Referee {
 
         boardState.forEach((piece) => {
             if (piece.team === team) {
-                if (this.hasMoreCaptures(piece.x, piece.y, team, boardState)) {
+                const hasCaptures =
+                    piece.type === PieceType.KING
+                        ? this.hasMoreCapturesKing(piece.x, piece.y, team, boardState)
+                        : this.hasMoreCaptures(piece.x, piece.y, team, boardState, piece.type);
+
+                if (hasCaptures) {
                     mandatoryCaptures.push({ x: piece.x, y: piece.y });
                 }
             }
         });
 
         return mandatoryCaptures;
+    }
+
+    hasMoreCapturesKing(
+        x: number,
+        y: number,
+        team: TeamType,
+        boardState: Piece[]
+    ): boolean {
+        const directions = [
+            { stepX: 1, stepY: 1 },
+            { stepX: 1, stepY: -1 },
+            { stepX: -1, stepY: 1 },
+            { stepX: -1, stepY: -1 },
+        ];
+
+        for (const dir of directions) {
+            let currentX = x + dir.stepX;
+            let currentY = y + dir.stepY;
+            let opponentFound = false;
+
+            while (currentX >= 0 && currentX < 8 && currentY >= 0 && currentY < 8) {
+                if (this.tileIsOccupied(currentX, currentY, boardState)) {
+                    if (
+                        this.tileIsOccupiedByOpponent(currentX, currentY, boardState, team) &&
+                        !opponentFound
+                    ) {
+                        // Знайшли суперника, якого можна побити
+                        opponentFound = true;
+                    } else {
+                        // Якщо знайшли другу фігуру, рух неможливий
+                        break;
+                    }
+                } else if (opponentFound) {
+                    // Якщо суперник був знайдений, а ця клітинка вільна — можливе захоплення
+                    return true;
+                }
+
+                currentX += dir.stepX;
+                currentY += dir.stepY;
+            }
+        }
+
+        return false;
     }
 
     promoteToKing(piece: Piece): Piece {
