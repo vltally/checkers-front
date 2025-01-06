@@ -1,12 +1,8 @@
-import {
-    Piece,
-    PieceType,
-    TeamType,
-} from '../components/Chessboard/Chessboard';
+import { Piece, PieceType, TeamType } from '../constants';
 
 export default class Referee {
     tileIsOccupied(x: number, y: number, boardState: Piece[]): boolean {
-        return boardState.some((p) => p.x === x && p.y === y);
+        return boardState.some((p) => p.position.x === x && p.position.y === y);
     }
 
     tileIsOccupiedByOpponent(
@@ -16,7 +12,7 @@ export default class Referee {
         team: TeamType
     ): boolean {
         return boardState.some(
-            (p) => p.x === x && p.y === y && p.team !== team
+            (p) => p.position.x === x && p.position.y === y && p.team !== team
         );
     }
 
@@ -30,10 +26,8 @@ export default class Referee {
         boardState: Piece[],
         captureCallback: (midX: number, midY: number) => void
     ): boolean {
-
-
-
         if (type === PieceType.PAWN) {
+            console.log(1);
             const direction = team === TeamType.OUR ? 1 : -1;
 
             // Check for mandatory captures first
@@ -77,9 +71,13 @@ export default class Referee {
             const dy = y - py;
 
             // Перевірка на обов’язкові захоплення
-            const mandatoryCaptures = this.findAllMandatoryCaptures(boardState, team);
+            const mandatoryCaptures = this.findAllMandatoryCaptures(
+                boardState,
+                team
+            );
             if (mandatoryCaptures.length > 0) {
-                const isCapture = Math.abs(dx) === Math.abs(dy) && Math.abs(dx) > 1; // Тільки захоплення
+                const isCapture =
+                    Math.abs(dx) === Math.abs(dy) && Math.abs(dx) > 1; // Тільки захоплення
                 if (!isCapture) {
                     return false; // Якщо є обов’язкові захоплення, забороняємо звичайний рух
                 }
@@ -103,7 +101,12 @@ export default class Referee {
             while (currentX !== x && currentY !== y) {
                 if (this.tileIsOccupied(currentX, currentY, boardState)) {
                     if (
-                        this.tileIsOccupiedByOpponent(currentX, currentY, boardState, team)
+                        this.tileIsOccupiedByOpponent(
+                            currentX,
+                            currentY,
+                            boardState,
+                            team
+                        )
                     ) {
                         if (opponentFound) {
                             // Знайдено зайву фігуру, рух неможливий
@@ -124,7 +127,10 @@ export default class Referee {
 
             // Якщо знайдено суперника — дозволяємо захоплення
             if (opponentFound) {
-                if (this.tileIsOccupiedByOpponent(x, y, boardState, team) || this.tileIsOccupied(x, y, boardState)) {
+                if (
+                    this.tileIsOccupiedByOpponent(x, y, boardState, team) ||
+                    this.tileIsOccupied(x, y, boardState)
+                ) {
                     return false;
                 }
                 captureCallback(midX, midY);
@@ -146,7 +152,6 @@ export default class Referee {
         boardState: Piece[],
         type: PieceType
     ): boolean {
-
         if (type === PieceType.KING) {
             return this.hasMoreCapturesKing(x, y, team, boardState);
         }
@@ -190,11 +195,22 @@ export default class Referee {
             if (piece.team === team) {
                 const hasCaptures =
                     piece.type === PieceType.KING
-                        ? this.hasMoreCapturesKing(piece.x, piece.y, team, boardState)
-                        : this.hasMoreCaptures(piece.x, piece.y, team, boardState, piece.type);
+                        ? this.hasMoreCapturesKing(
+                              piece.position.x,
+                              piece.position.y,
+                              team,
+                              boardState
+                          )
+                        : this.hasMoreCaptures(
+                              piece.position.x,
+                              piece.position.y,
+                              team,
+                              boardState,
+                              piece.type
+                          );
 
                 if (hasCaptures) {
-                    mandatoryCaptures.push({ x: piece.x, y: piece.y });
+                    mandatoryCaptures.push({ x: piece.position.x, y: piece.position.y });
                 }
             }
         });
@@ -220,10 +236,20 @@ export default class Referee {
             let currentY = y + dir.stepY;
             let opponentFound = false;
 
-            while (currentX >= 0 && currentX < 8 && currentY >= 0 && currentY < 8) {
+            while (
+                currentX >= 0 &&
+                currentX < 8 &&
+                currentY >= 0 &&
+                currentY < 8
+            ) {
                 if (this.tileIsOccupied(currentX, currentY, boardState)) {
                     if (
-                        this.tileIsOccupiedByOpponent(currentX, currentY, boardState, team) &&
+                        this.tileIsOccupiedByOpponent(
+                            currentX,
+                            currentY,
+                            boardState,
+                            team
+                        ) &&
                         !opponentFound
                     ) {
                         // Знайшли суперника, якого можна побити
@@ -247,8 +273,8 @@ export default class Referee {
 
     promoteToKing(piece: Piece): Piece {
         if (
-            (piece.team === TeamType.OUR && piece.y === 7) ||
-            (piece.team === TeamType.OPPONENT && piece.y === 0)
+            (piece.team === TeamType.OUR && piece.position.y === 7) ||
+            (piece.team === TeamType.OPPONENT && piece.position.y === 0)
         ) {
             return {
                 ...piece,
