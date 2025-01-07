@@ -5,78 +5,83 @@ import {
     HORIZONTAL_AXIS,
     initialBoardState,
     Piece,
-    Position,
+    Position, samePosition,
     TeamType, TILE_SIZE,
     VERTICAL_AXIS,
-} from '../../constants';
+} from '../../Constants';
 import Referee from '../../referee/Referee';
 import Tile from '../Tile/Tile';
 import './Chessboard.css';
 
 export default function Chessboard() {
+    // State to keep track of the currently selected piece (HTML element).
     const [activePiece, setActivePiece] = useState<HTMLElement | null>(null);
-    const [gridX, setGridX] = useState(0);
-    const [gridY, setGridY] = useState(0);
+    // State to store the initial position of the piece when picked up.
+    const [grabPosition, setGrabPosition] = useState<Position>({x: -1, y: -1});
+    // State to store the current board pieces and their positions.
     const [pieces, setPieces] = useState<Piece[]>(initialBoardState);
+    // State to keep track of whose turn it currently is (OUR team vs OPPONENT team).
     const [currentTeam, setCurrentTeam] = useState<TeamType>(TeamType.OUR);
-    const [mandatoryCaptures, setMandatoryCaptures] = useState<
-        { x: number; y: number }[]
-    >([]);
+    // State to store all pieces with mandatory captures.
+    const [mandatoryCaptures, setMandatoryCaptures] = useState<Position[]>([]);
+    // State to track whether the current move is part of a multiple capture scenario.
     const [isMultipleCapture, setIsMultipleCapture] = useState(false);
+    // State to store the piece that was last moved.
     const [lastMovedPiece, setLastMovedPiece] = useState<Piece | null>(null);
-
+    // Reference to the chessboard DOM element (used to calculate positions).
     const chessboardRef = useRef<HTMLDivElement>(null);
+    // Instance of the Referee class for validating moves.
     const referee = new Referee();
 
+    // useEffect hook to calculate mandatory captures whenever the game state changes.
     useEffect(() => {
         if (!isMultipleCapture) {
             const captures = referee.findAllMandatoryCaptures(
                 pieces,
                 currentTeam
             );
+            // Updates the list of mandatory captures for the current team.
             setMandatoryCaptures(captures);
         }
     }, [currentTeam, pieces, isMultipleCapture]);
 
+
+    // Function to grab a piece when clicked or touched.
     function grabPiece(e: React.MouseEvent) {
         const element = e.target as HTMLElement;
         const chessboard = chessboardRef.current;
 
         if (element.classList.contains('chess-piece') && chessboard) {
-            const x = Math.floor((e.clientX - chessboard.offsetLeft) / TILE_SIZE);
-            const y = Math.abs(
+            // Calculate the grid position where the piece was picked up.
+            const grabX = Math.floor((e.clientX - chessboard.offsetLeft) / TILE_SIZE);
+            const grabY = Math.abs(
                 Math.ceil((e.clientY - chessboard.offsetTop - BOARD_SIZE) / TILE_SIZE)
             );
-
             const piece = pieces.find(
-                (p) => p.position.x === x && p.position.y === y
+                (p) => samePosition(p.position, { x: grabX, y: grabY })
             );
-
+            // Prevents grabbing the piece if it's not the current team's turn or if the piece isn't mandatory.
             if (piece?.team !== currentTeam) {
                 return;
             }
-
             if (mandatoryCaptures.length > 0) {
                 const isMandatoryPiece = mandatoryCaptures.some(
-                    (pos) => pos.x === x && pos.y === y
+                    (pos) => samePosition(pos, { x: grabX, y: grabY })
                 );
                 if (!isMandatoryPiece) {
                     return;
                 }
             }
-
             if (isMultipleCapture && lastMovedPiece) {
                 if (
-                    x !== lastMovedPiece.position.x ||
-                    y !== lastMovedPiece.position.y
+                    grabX !== lastMovedPiece.position.x ||
+                    grabY !== lastMovedPiece.position.y
                 ) {
                     return;
                 }
             }
-
-            setGridX(x);
-            setGridY(y);
-
+            // Store the initial grabbed position and make the piece draggable.
+            setGrabPosition({ x: grabX, y: grabY });
             const mouseX = e.clientX - TILE_SIZE/2;
             const mouseY = e.clientY - TILE_SIZE/2;
             element.style.zIndex = '100';
@@ -87,9 +92,11 @@ export default function Chessboard() {
         }
     }
 
+    // Function to move a piece visually during dragging.
     function movePiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
         if (activePiece && chessboard) {
+            // Define min/max boundaries for movement to keep the piece within the chessboard.
             const minX = chessboard.offsetLeft;
             const minY = chessboard.offsetTop;
             const maxX = chessboard.offsetLeft + chessboard.clientWidth - TILE_SIZE;
@@ -99,6 +106,7 @@ export default function Chessboard() {
             activePiece.style.zIndex = '100';
             activePiece.style.position = 'absolute';
 
+            // Update the position of the piece while ensuring it doesn't move outside the boundaries.
             if (x < minX) {
                 activePiece.style.left = `${minX}px`;
             } else if (x > maxX) {
@@ -117,6 +125,7 @@ export default function Chessboard() {
         }
     }
 
+    // Handles the start of a touch gesture by translating it into mouse-based input.
     function handleTouchStart(e: React.TouchEvent) {
         const touch = e.touches[0]; // Беремо перший елемент із дотиків
         const mouseEvent = {
@@ -127,6 +136,7 @@ export default function Chessboard() {
         grabPiece(mouseEvent);
     }
 
+    // Handles movement during a touch gesture.
     function handleTouchMove(e: React.TouchEvent) {
         const touch = e.touches[0];
         const mouseEvent = {
@@ -137,6 +147,7 @@ export default function Chessboard() {
         movePiece(mouseEvent);
     }
 
+    // Handles the end of a touch gesture by simulating the piece dropped behavior.
     function handleTouchEnd(e: React.TouchEvent) {
         const touch = e.changedTouches[0]; // Визначаємо останнє положення дотику
         const mouseEvent = {
@@ -147,16 +158,18 @@ export default function Chessboard() {
         dropPiece(mouseEvent);
     }
 
+    // Handles when a piece is dropped onto the board grid.
     function dropPiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
         if (activePiece && chessboard) {
+            // Convert drop position in pixels to board grid coordinates.
             const x = Math.floor((e.clientX - chessboard.offsetLeft) / TILE_SIZE);
             const y = Math.abs(
                 Math.ceil((e.clientY - chessboard.offsetTop - BOARD_SIZE) / TILE_SIZE)
             );
 
             const currentPiece = pieces.find(
-                (p) => p.position.x === gridX && p.position.y === gridY
+                (p) => samePosition(p.position, grabPosition)
             );
 
             if (currentPiece) {
@@ -165,73 +178,53 @@ export default function Chessboard() {
 
                 // Виконуємо перевірку на валідність ходу
                 const validMove = referee.isValidMove(
-                    gridX,
-                    gridY,
-                    x,
-                    y,
+                    grabPosition,
+                    {x, y},
                     currentPiece.type,
                     currentPiece.team,
                     pieces,
                     (midX, midY) => {
+                        // If the move involves a capture, remove the captured piece.
                         wasCapture = true;
                         updatedPieces = pieces.filter(
                             (p) =>
-                                !(
-                                    p.position.x === midX &&
-                                    p.position.y === midY
-                                )
+                                !samePosition(p.position, { x: midX, y: midY})
                         );
                     }
                 );
 
                 if (validMove) {
 
-                    // Оновлюємо позицію активної фігури
+                    // Update the position of the moved piece.
                     updatedPieces = updatedPieces.map((piece) => {
-                        if (
-                            piece.position.x === currentPiece.position.x &&
-                            piece.position.y === currentPiece.position.y
-                        ) {
+                        if (samePosition(piece.position, currentPiece.position)) {
                             const newPosition: Position = { x, y };
-
                             return { ...piece, position: newPosition } as Piece;
                         }
-
                         return piece;
                     });
-
-
-                    // Застосовуємо додатковий рефакторинг
+                    // Check for king promotions and update pieces.
                     updatedPieces =
                         referee.updatePiecesAfterMove(updatedPieces);
-
-
-                    // Оновлюємо стан
+                    // Update the state with the new board.
                     setPieces(updatedPieces);
-
-
                     if (wasCapture) {
-                        // Перевірка на можливість додаткового побиття з ОНОВЛЕНИМ станом
+                        // Checks for additional captures with the new state.
                         const additionalCaptures = referee.hasMoreCaptures(
-                            x,
-                            y,
+                            { x, y },
                             currentPiece.team,
                             updatedPieces, // Використовуємо оновлений стан
                             currentPiece.type
                         );
-
                         if (additionalCaptures) {
                             const position: Position = { x: x, y: y };
                             setIsMultipleCapture(true);
                             setMandatoryCaptures([{ x, y }]);
-
                             setLastMovedPiece({ ...currentPiece, position: position });
-
                             return;
                         }
                     }
-
-                    // Скидаємо всі стани для наступного ходу
+                    // Reset states for the next player's turn.
                     setIsMultipleCapture(false);
                     setMandatoryCaptures([]);
                     setCurrentTeam((prevTeam) =>
@@ -242,8 +235,7 @@ export default function Chessboard() {
                     setLastMovedPiece(null);
                 }
             }
-
-            // Скидаємо стилі вибраної фігури
+            // Reset styles for the dragged piece.
             activePiece.style.zIndex = '1';
             activePiece.style.position = 'relative';
             activePiece.style.removeProperty('top');
@@ -252,22 +244,16 @@ export default function Chessboard() {
         }
     }
 
+    // Renders the tiles and pieces on the chessboard.
     const board = [];
-
     for (let j = VERTICAL_AXIS.length - 1; j >= 0; j--) {
         for (let i = 0; i < HORIZONTAL_AXIS.length; i++) {
             const number = j + i + 2;
             let image = undefined;
             const isHighlighted = mandatoryCaptures.some(
-                (pos) => pos.x === i && pos.y === j
-            );
-
-            pieces.forEach((p) => {
-                if (p.position.x === i && p.position.y === j) {
-                    image = p.image;
-                }
-            });
-
+                (pos) =>  samePosition(pos, {x: i, y: j}));
+            const piece = pieces.find(p => samePosition(p.position, {x: i, y: j}));
+            image = piece ? piece.image : undefined;
             board.push(
                 <Tile
                     key={`${j},${i}`}

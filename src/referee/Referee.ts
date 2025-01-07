@@ -1,26 +1,27 @@
-import { Piece, PieceType, TeamType } from '../constants';
+import {Piece, PieceType, Position, TeamType} from '../Constants';
 
 export default class Referee {
-    tileIsOccupied(x: number, y: number, boardState: Piece[]): boolean {
-        return boardState.some((p) => p.position.x === x && p.position.y === y);
+
+    // Checks if a specific board tile is occupied by any piece.
+    tileIsOccupied(position: Position, boardState: Piece[]): boolean {
+        return boardState.some((p) => p.position.x === position.x && p.position.y === position.y);
     }
 
+    // Checks if a specific board tile is occupied by a piece from the opponent's team.
     tileIsOccupiedByOpponent(
-        x: number,
-        y: number,
+        position: Position,
         boardState: Piece[],
         team: TeamType
     ): boolean {
         return boardState.some(
-            (p) => p.position.x === x && p.position.y === y && p.team !== team
+            (p) => p.position.x === position.x && p.position.y === position.y && p.team !== team
         );
     }
 
+    // Validates if a move is legal based on the rules for each piece type, including mandatory captures.
     isValidMove(
-        px: number,
-        py: number,
-        x: number,
-        y: number,
+        initialPosition: Position,
+        desiredPosition: Position,
         type: PieceType,
         team: TeamType,
         boardState: Piece[],
@@ -38,98 +39,99 @@ export default class Referee {
             if (mandatoryCaptures.length > 0) {
                 // Only allow capture moves when there are mandatory captures
                 const isCapture =
-                    Math.abs(x - px) === 2 && Math.abs(y - py) === 2;
+                    Math.abs(desiredPosition.x - initialPosition.x) === 2 && Math.abs(desiredPosition.y - initialPosition.y) === 2;
                 if (!isCapture) {
+                    //Blocks other moves if captures are mandatory.
                     return false;
                 }
             }
 
-            // Regular move
-            if (Math.abs(x - px) === 1 && y - py === direction) {
-                return !this.tileIsOccupied(x, y, boardState);
+            // Handles regular moves.
+            if (Math.abs(desiredPosition.x - initialPosition.x) === 1 && desiredPosition.y - initialPosition.y === direction) {
+                return !this.tileIsOccupied(desiredPosition, boardState);
             }
 
-            // Capture move
-            if (Math.abs(x - px) === 2 && Math.abs(y - py) === 2) {
-                const midX = px + (x - px) / 2;
-                const midY = py + (y - py) / 2;
+            // Handles capture moves.
+            if (Math.abs(desiredPosition.x - initialPosition.x) === 2 && Math.abs(desiredPosition.y - initialPosition.y) === 2) {
+                const midX = initialPosition.x + (desiredPosition.x - initialPosition.x) / 2;
+                const midY = initialPosition.y + (desiredPosition.y - initialPosition.y) / 2;
 
-                // ПЕРЕВІРКА КІНЦЕВОЇ КЛІТИНКИ
+                // Checks if the destination tile is empty and there is an opponent piece to capture.
                 if (
-                    !this.tileIsOccupied(x, y, boardState) && // Клітина повинна бути вільною
-                    !this.tileIsOccupiedByOpponent(x, y, boardState, team) && // Не зайнята ворожою
-                    this.tileIsOccupiedByOpponent(midX, midY, boardState, team) // Можливе захоплення
+                    !this.tileIsOccupied(desiredPosition, boardState) && // Клітина повинна бути вільною
+                    !this.tileIsOccupiedByOpponent(desiredPosition, boardState, team) && // Не зайнята ворожою
+                    this.tileIsOccupiedByOpponent({x: midX, y: midY}, boardState, team) // Можливе захоплення
                 ) {
                     captureCallback(midX, midY);
+                    // Calls capture logic.
                     return true;
                 }
             }
         }
 
         if (type === PieceType.KING) {
-            const dx = x - px;
-            const dy = y - py;
+            const dx = desiredPosition.x - initialPosition.x;
+            const dy = desiredPosition.y - initialPosition.y;
 
-            // Перевірка на обов’язкові захоплення
+            // Checks for mandatory captures.
             const mandatoryCaptures = this.findAllMandatoryCaptures(
                 boardState,
                 team
             );
             if (mandatoryCaptures.length > 0) {
                 const isCapture =
-                    Math.abs(dx) === Math.abs(dy) && Math.abs(dx) > 1; // Тільки захоплення
+                    Math.abs(dx) === Math.abs(dy) && Math.abs(dx) > 1;
+                // Ensures diagonal capture.
                 if (!isCapture) {
-                    return false; // Якщо є обов’язкові захоплення, забороняємо звичайний рух
+                    return false;
                 }
             }
 
-            // Дозволено лише діагональний рух
+            // Allows only diagonal movement.
             if (Math.abs(dx) !== Math.abs(dy)) {
                 return false;
             }
 
-            // Перевірка, чи шлях вільний
+            // Checks if the path for the King is clear.
             const stepX = dx > 0 ? 1 : -1;
             const stepY = dy > 0 ? 1 : -1;
-            let currentX = px + stepX;
-            let currentY = py + stepY;
+            let currentX = initialPosition.x + stepX;
+            let currentY = initialPosition.y + stepY;
 
-            let opponentFound = false; // Слідкуємо, чи знайдено суперника
+            let opponentFound = false; // Tracks if an opponent is found for capture.
             let midX = -1;
             let midY = -1;
 
-            while (currentX !== x && currentY !== y) {
-                if (this.tileIsOccupied(currentX, currentY, boardState)) {
+            while (currentX !== desiredPosition.x && currentY !== desiredPosition.y) {
+                if (this.tileIsOccupied({x: currentX, y: currentY}, boardState)) {
                     if (
                         this.tileIsOccupiedByOpponent(
-                            currentX,
-                            currentY,
+                            { x:currentX, y: currentY },
                             boardState,
                             team
                         )
                     ) {
                         if (opponentFound) {
-                            // Знайдено зайву фігуру, рух неможливий
+                            // Second occupied tile blocks movement.
                             return false;
                         }
-                        // Помічаємо суперника для потенційного захоплення
+
                         opponentFound = true;
                         midX = currentX;
                         midY = currentY;
                     } else {
-                        // Шлях заблоковано своєю фігурою
                         return false;
+                        // Blocked by a piece of the same team.
                     }
                 }
                 currentX += stepX;
                 currentY += stepY;
             }
 
-            // Якщо знайдено суперника — дозволяємо захоплення
             if (opponentFound) {
                 if (
-                    this.tileIsOccupiedByOpponent(x, y, boardState, team) ||
-                    this.tileIsOccupied(x, y, boardState)
+                    this.tileIsOccupiedByOpponent(desiredPosition, boardState, team) ||
+                    this.tileIsOccupied(desiredPosition, boardState)
                 ) {
                     return false;
                 }
@@ -137,25 +139,25 @@ export default class Referee {
                 return true;
             }
 
-            // Дозволяємо звичайний рух лише за відсутності обов'язкових захоплень
+            // Allows normal move only if no mandatory captures exist.
             return mandatoryCaptures.length === 0;
         }
 
         return false;
     }
 
-    // Check if a piece has more captures available
+    // Checks if a given piece has available capture moves.
     hasMoreCaptures(
-        x: number,
-        y: number,
+        position: Position,
         team: TeamType,
         boardState: Piece[],
         type: PieceType
     ): boolean {
         if (type === PieceType.KING) {
-            return this.hasMoreCapturesKing(x, y, team, boardState);
+            return this.hasMoreCapturesKing(position, team, boardState);
         }
 
+        // All possible directions for capture.
         const directions = [
             { dx: 2, dy: 2 },
             { dx: 2, dy: -2 },
@@ -164,18 +166,19 @@ export default class Referee {
         ];
 
         for (const dir of directions) {
-            const newX = x + dir.dx;
-            const newY = y + dir.dy;
-            const midX = x + dir.dx / 2;
-            const midY = y + dir.dy / 2;
+            const newX = position.x + dir.dx;
+            const newY = position.y + dir.dy;
+            const midX = position.x + dir.dx / 2;
+            const midY = position.y + dir.dy / 2;
 
+            // Verifies that the move ends in an empty tile and captures an opponent piece.
             if (
                 newX >= 0 &&
                 newX < 8 &&
                 newY >= 0 &&
                 newY < 8 &&
-                !this.tileIsOccupied(newX, newY, boardState) && // ПЕРЕВІРКА ВІЛЬНОЇ КІНЦЕВОЇ ПЛИТКИ
-                this.tileIsOccupiedByOpponent(midX, midY, boardState, team)
+                !this.tileIsOccupied({x: newX, y: newY}, boardState) && // ПЕРЕВІРКА ВІЛЬНОЇ КІНЦЕВОЇ ПЛИТКИ
+                this.tileIsOccupiedByOpponent({x: midX, y:midY}, boardState, team)
             ) {
                 return true;
             }
@@ -184,7 +187,7 @@ export default class Referee {
         return false;
     }
 
-    // Find all pieces that have mandatory captures
+    // Identifies all pieces eligible for mandatory captures.
     findAllMandatoryCaptures(
         boardState: Piece[],
         team: TeamType
@@ -196,14 +199,12 @@ export default class Referee {
                 const hasCaptures =
                     piece.type === PieceType.KING
                         ? this.hasMoreCapturesKing(
-                              piece.position.x,
-                              piece.position.y,
+                              piece.position,
                               team,
                               boardState
                           )
                         : this.hasMoreCaptures(
-                              piece.position.x,
-                              piece.position.y,
+                              piece.position,
                               team,
                               boardState,
                               piece.type
@@ -218,12 +219,13 @@ export default class Referee {
         return mandatoryCaptures;
     }
 
+    // Checks if the King piece has more capturing options.
     hasMoreCapturesKing(
-        x: number,
-        y: number,
+        position: Position,
         team: TeamType,
         boardState: Piece[]
     ): boolean {
+        // All diagonal directions for moving the King.
         const directions = [
             { stepX: 1, stepY: 1 },
             { stepX: 1, stepY: -1 },
@@ -232,34 +234,34 @@ export default class Referee {
         ];
 
         for (const dir of directions) {
-            let currentX = x + dir.stepX;
-            let currentY = y + dir.stepY;
+            let currentX = position.x + dir.stepX;
+            let currentY = position.y + dir.stepY;
             let opponentFound = false;
 
+            // Loop through possible moves in one direction.
             while (
                 currentX >= 0 &&
                 currentX < 8 &&
                 currentY >= 0 &&
                 currentY < 8
             ) {
-                if (this.tileIsOccupied(currentX, currentY, boardState)) {
+                if (this.tileIsOccupied({x: currentX, y: currentY}, boardState)) {
                     if (
                         this.tileIsOccupiedByOpponent(
-                            currentX,
-                            currentY,
+                            {x: currentX, y: currentY},
                             boardState,
                             team
                         ) &&
                         !opponentFound
                     ) {
-                        // Знайшли суперника, якого можна побити
+                        // Found an opponent for capture.
                         opponentFound = true;
                     } else {
-                        // Якщо знайшли другу фігуру, рух неможливий
+                        // A piece blocks further movement.
                         break;
                     }
                 } else if (opponentFound) {
-                    // Якщо суперник був знайдений, а ця клітинка вільна — можливе захоплення
+                    // Found a valid capture move.
                     return true;
                 }
 
@@ -271,6 +273,7 @@ export default class Referee {
         return false;
     }
 
+    // Promotes a piece to a King if it reaches the opponent's back rank.
     promoteToKing(piece: Piece): Piece {
         if (
             (piece.team === TeamType.OUR && piece.position.y === 7) ||
@@ -288,6 +291,7 @@ export default class Referee {
         return piece;
     }
 
+    // Checks and updates all pieces on the board for possible promotions after a move.
     updatePiecesAfterMove(pieces: Piece[]): Piece[] {
         return pieces.map((piece) => this.promoteToKing(piece));
     }
