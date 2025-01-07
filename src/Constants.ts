@@ -10,6 +10,11 @@ export function samePosition(p1: Position, p2: Position) : boolean {
     return p1.x === p2.x && p1.y === p2.y;
 }
 
+export interface MoveResult {
+    success: boolean;
+    capturedPiece?: Position;
+}
+
 export interface Position {
     x: number;
     y: number;

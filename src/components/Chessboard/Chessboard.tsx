@@ -12,6 +12,7 @@ import {
 import Referee from '../../referee/Referee';
 import Tile from '../Tile/Tile';
 import './Chessboard.css';
+import { findAllMandatoryCaptures, updatePiecesAfterMove, hasMoreCaptures } from "../../referee/rules/GeneralRules.ts"
 
 export default function Chessboard() {
     // State to keep track of the currently selected piece (HTML element).
@@ -33,10 +34,11 @@ export default function Chessboard() {
     // Instance of the Referee class for validating moves.
     const referee = new Referee();
 
+
     // useEffect hook to calculate mandatory captures whenever the game state changes.
     useEffect(() => {
         if (!isMultipleCapture) {
-            const captures = referee.findAllMandatoryCaptures(
+            const captures = findAllMandatoryCaptures(
                 pieces,
                 currentTeam
             );
@@ -162,69 +164,72 @@ export default function Chessboard() {
     function dropPiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
         if (activePiece && chessboard) {
-            // Convert drop position in pixels to board grid coordinates.
+            // Конвертуємо координати дропу в позицію на сітці
             const x = Math.floor((e.clientX - chessboard.offsetLeft) / TILE_SIZE);
             const y = Math.abs(
                 Math.ceil((e.clientY - chessboard.offsetTop - BOARD_SIZE) / TILE_SIZE)
             );
 
+            // Знаходимо поточну фігуру, яку пересуваємо
             const currentPiece = pieces.find(
                 (p) => samePosition(p.position, grabPosition)
             );
 
             if (currentPiece) {
-                let wasCapture = false;
-                let updatedPieces = [...pieces];
-
                 // Виконуємо перевірку на валідність ходу
-                const validMove = referee.isValidMove(
+                const moveResult = referee.isValidMove(
                     grabPosition,
-                    {x, y},
+                    { x, y },
                     currentPiece.type,
                     currentPiece.team,
-                    pieces,
-                    (midX, midY) => {
-                        // If the move involves a capture, remove the captured piece.
-                        wasCapture = true;
-                        updatedPieces = pieces.filter(
-                            (p) =>
-                                !samePosition(p.position, { x: midX, y: midY})
-                        );
-                    }
+                    pieces // Передаємо поточний стан дошки
                 );
 
-                if (validMove) {
+                let wasCapture = false; // Ініціалізуємо прапор для захоплення
 
-                    // Update the position of the moved piece.
-                    updatedPieces = updatedPieces.map((piece) => {
+                if (moveResult.success) {
+                    let updatedPieces = pieces.map((piece) => {
+                        // Модифікація позиції обраної фігури
                         if (samePosition(piece.position, currentPiece.position)) {
-                            const newPosition: Position = { x, y };
-                            return { ...piece, position: newPosition } as Piece;
+                            return { ...piece, position: { x, y } };
                         }
                         return piece;
                     });
-                    // Check for king promotions and update pieces.
-                    updatedPieces =
-                        referee.updatePiecesAfterMove(updatedPieces);
-                    // Update the state with the new board.
+
+                    // Видалення захопленої фігури, якщо таке відбулося
+                    if (moveResult.capturedPiece) {
+                        wasCapture = true; // Встановлюємо прапор, якщо було захоплення
+                        updatedPieces = updatedPieces.filter(
+                            (p) =>
+                                !samePosition(p.position, moveResult.capturedPiece!)
+                        );
+                    }
+
+                    // Оновлюємо стан (promotion, наступний хід і т.д.)
+                    updatedPieces = updatePiecesAfterMove(updatedPieces);
                     setPieces(updatedPieces);
+
+                    // Перевірка для додаткового ходу
                     if (wasCapture) {
-                        // Checks for additional captures with the new state.
-                        const additionalCaptures = referee.hasMoreCaptures(
+                        const additionalCaptures = hasMoreCaptures(
                             { x, y },
                             currentPiece.team,
-                            updatedPieces, // Використовуємо оновлений стан
+                            updatedPieces,
                             currentPiece.type
                         );
                         if (additionalCaptures) {
-                            const position: Position = { x: x, y: y };
-                            setIsMultipleCapture(true);
-                            setMandatoryCaptures([{ x, y }]);
-                            setLastMovedPiece({ ...currentPiece, position: position });
+                            // Якщо доступні додаткові захоплення:
+                            setIsMultipleCapture(true); // Встановлюємо прапор для множинного захоплення
+                            setMandatoryCaptures([{ x, y }]); // Зберігаємо позиції для обов'язкових захоплень
+                            setLastMovedPiece({
+                                ...currentPiece,
+                                position: { x, y },
+                            });
                             return;
                         }
                     }
-                    // Reset states for the next player's turn.
+
+                    // Скидання стану для наступного ходу
                     setIsMultipleCapture(false);
                     setMandatoryCaptures([]);
                     setCurrentTeam((prevTeam) =>
@@ -235,7 +240,8 @@ export default function Chessboard() {
                     setLastMovedPiece(null);
                 }
             }
-            // Reset styles for the dragged piece.
+
+            // Скидання стилів для перетягуваного елемента
             activePiece.style.zIndex = '1';
             activePiece.style.position = 'relative';
             activePiece.style.removeProperty('top');
