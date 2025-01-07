@@ -11,7 +11,7 @@ export const kingMove = (
     const dy = desiredPosition.y - initialPosition.y;
     const result: MoveResult = { success: false };
 
-    // Перевірка на обов'язкове захоплення
+    // Check for mandatory captures
     const mandatoryCaptures = findAllMandatoryCaptures(boardState, team);
     if (mandatoryCaptures.length > 0) {
         const isCapture = Math.abs(dx) === Math.abs(dy) && Math.abs(dx) > 1;
@@ -20,7 +20,7 @@ export const kingMove = (
         }
     }
 
-    // Перевірка руху по діагоналі
+    // Verify diagonal movement
     if (Math.abs(dx) !== Math.abs(dy)) {
         return result;
     }
@@ -30,40 +30,43 @@ export const kingMove = (
     let currentX = initialPosition.x + stepX;
     let currentY = initialPosition.y + stepY;
 
-    let opponentFound = false; // Прапорець, чи знайдено фігуру для захоплення
-    let midX = -1;
-    let midY = -1;
+    let opponentFound = false; // Flag to check if an opponent piece is found for capture
+    let midX = -1; // Stores x-coordinate of the piece being captured
+    let midY = -1; // Stores y-coordinate of the piece being captured
 
+    // Traverse the diagonal path to the destination
     while (currentX !== desiredPosition.x && currentY !== desiredPosition.y) {
         if (tileIsOccupied({ x: currentX, y: currentY }, boardState)) {
             if (
                 tileIsOccupiedByOpponent({ x: currentX, y: currentY }, boardState, team)
             ) {
+                // If an opponent is found, verify that no other piece is blocking
                 if (opponentFound) {
-                    return result; // Неможливо: блокують інші фігури
+                    return result;  // Invalid: More than one piece blocks the path
                 }
                 opponentFound = true;
                 midX = currentX;
                 midY = currentY;
             } else {
-                return result; // Блокування своїм гравцем
+                return result; // Blocked by a piece of the same team
             }
         }
         currentX += stepX;
         currentY += stepY;
     }
 
-    // Обробка захоплення
+    // Handle capture move
     if (opponentFound) {
         if (tileIsOccupied(desiredPosition, boardState)) {
+            // Capture invalid: Destination must be empty
             return result;
         }
         result.success = true;
-        result.capturedPiece = { x: midX, y: midY }; // Передаємо позицію захопленої фігури
+        result.capturedPiece = { x: midX, y: midY }; // Store the position of the captured piece
         return result;
     }
 
-    // Звичайний рух дозволяється лише за відсутністю захоплень
+    // Allow regular movement only when no mandatory captures exist
     result.success = mandatoryCaptures.length === 0;
     return result;
 };

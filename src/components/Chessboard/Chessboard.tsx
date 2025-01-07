@@ -129,10 +129,10 @@ export default function Chessboard() {
 
     // Handles the start of a touch gesture by translating it into mouse-based input.
     function handleTouchStart(e: React.TouchEvent) {
-        const touch = e.touches[0]; // Беремо перший елемент із дотиків
+        const touch = e.touches[0]; // Take the first touch point.
         const mouseEvent = {
-            clientX: touch.clientX, // Координати дотику
-            clientY: touch.clientY,
+            clientX: touch.clientX, // Touch X-coordinate
+            clientY: touch.clientY, // Touch Y-coordinate
             target: e.target,
         } as unknown as React.MouseEvent;
         grabPiece(mouseEvent);
@@ -151,10 +151,10 @@ export default function Chessboard() {
 
     // Handles the end of a touch gesture by simulating the piece dropped behavior.
     function handleTouchEnd(e: React.TouchEvent) {
-        const touch = e.changedTouches[0]; // Визначаємо останнє положення дотику
+        const touch = e.changedTouches[0]; // Get the last touch position
         const mouseEvent = {
-            clientX: touch.clientX, // Отримуємо фінальні координати
-            clientY: touch.clientY,
+            clientX: touch.clientX, // Final X-coordinate
+            clientY: touch.clientY, // Final Y-coordinate
             target: e.target,
         } as unknown as React.MouseEvent;
         dropPiece(mouseEvent);
@@ -164,52 +164,52 @@ export default function Chessboard() {
     function dropPiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
         if (activePiece && chessboard) {
-            // Конвертуємо координати дропу в позицію на сітці
+            // Convert drop position to grid coordinates
             const x = Math.floor((e.clientX - chessboard.offsetLeft) / TILE_SIZE);
             const y = Math.abs(
                 Math.ceil((e.clientY - chessboard.offsetTop - BOARD_SIZE) / TILE_SIZE)
             );
 
-            // Знаходимо поточну фігуру, яку пересуваємо
+            // Find the current piece being moved
             const currentPiece = pieces.find(
                 (p) => samePosition(p.position, grabPosition)
             );
 
             if (currentPiece) {
-                // Виконуємо перевірку на валідність ходу
+                // Validate the move
                 const moveResult = referee.isValidMove(
                     grabPosition,
                     { x, y },
                     currentPiece.type,
                     currentPiece.team,
-                    pieces // Передаємо поточний стан дошки
+                    pieces // Provide board state
                 );
 
-                let wasCapture = false; // Ініціалізуємо прапор для захоплення
+                let wasCapture = false; // Initialize flag for a capture move
 
                 if (moveResult.success) {
                     let updatedPieces = pieces.map((piece) => {
-                        // Модифікація позиції обраної фігури
+                        // Update the position of the moved piece
                         if (samePosition(piece.position, currentPiece.position)) {
                             return { ...piece, position: { x, y } };
                         }
                         return piece;
                     });
 
-                    // Видалення захопленої фігури, якщо таке відбулося
+                    // Remove the captured piece, if any
                     if (moveResult.capturedPiece) {
-                        wasCapture = true; // Встановлюємо прапор, якщо було захоплення
+                        wasCapture = true; // Flag as a capture move
                         updatedPieces = updatedPieces.filter(
                             (p) =>
                                 !samePosition(p.position, moveResult.capturedPiece!)
                         );
                     }
 
-                    // Оновлюємо стан (promotion, наступний хід і т.д.)
+                    // Update piece state (e.g., promotion, next move, etc.)
                     updatedPieces = updatePiecesAfterMove(updatedPieces);
                     setPieces(updatedPieces);
 
-                    // Перевірка для додаткового ходу
+                    // Check for additional capture moves
                     if (wasCapture) {
                         const additionalCaptures = hasMoreCaptures(
                             { x, y },
@@ -218,9 +218,9 @@ export default function Chessboard() {
                             currentPiece.type
                         );
                         if (additionalCaptures) {
-                            // Якщо доступні додаткові захоплення:
-                            setIsMultipleCapture(true); // Встановлюємо прапор для множинного захоплення
-                            setMandatoryCaptures([{ x, y }]); // Зберігаємо позиції для обов'язкових захоплень
+                            // Multi-capture scenario: Update necessary states
+                            setIsMultipleCapture(true);
+                            setMandatoryCaptures([{ x, y }]);
                             setLastMovedPiece({
                                 ...currentPiece,
                                 position: { x, y },
@@ -229,7 +229,7 @@ export default function Chessboard() {
                         }
                     }
 
-                    // Скидання стану для наступного ходу
+                    // Reset states for the next turn
                     setIsMultipleCapture(false);
                     setMandatoryCaptures([]);
                     setCurrentTeam((prevTeam) =>

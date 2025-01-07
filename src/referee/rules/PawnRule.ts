@@ -10,20 +10,20 @@ export const pawnMove = (
     const direction = team === TeamType.OUR ? 1 : -1;
     const result: MoveResult = { success: false };
 
-    // Перевірка обов'язкових захоплень
+    // Check for mandatory captures
     const mandatoryCaptures = findAllMandatoryCaptures(boardState, team);
     if (mandatoryCaptures.length > 0) {
-        // Дозволити лише захоплення, якщо є обов'язкові
+        // Allow only capture moves if mandatory captures exist
         const isCapture =
             Math.abs(desiredPosition.x - initialPosition.x) === 2 &&
             Math.abs(desiredPosition.y - initialPosition.y) === 2;
 
         if (!isCapture) {
-            return result; // Інші рухи заблоковано
+            return result; // Block other moves
         }
     }
 
-    // Обробка звичайних рухів
+    // Handle standard moves
     if (
         Math.abs(desiredPosition.x - initialPosition.x) === 1 &&
         desiredPosition.y - initialPosition.y === direction
@@ -34,7 +34,7 @@ export const pawnMove = (
         return result;
     }
 
-    // Обробка захоплення
+    // Handle captures
     if (
         Math.abs(desiredPosition.x - initialPosition.x) === 2 &&
         Math.abs(desiredPosition.y - initialPosition.y) === 2
@@ -47,7 +47,7 @@ export const pawnMove = (
             tileIsOccupiedByOpponent({ x: midX, y: midY }, boardState, team)
         ) {
             result.success = true;
-            result.capturedPiece = { x: midX, y: midY }; // Передаємо позицію захопленої фігури
+            result.capturedPiece = { x: midX, y: midY }; // Provide the captured piece's position
         }
     }
 
