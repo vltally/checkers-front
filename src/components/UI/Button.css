@@ -1,0 +1,21 @@
+.custom-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    background-color: #007bff; /* Синій фон */
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.custom-button:hover {
+    background-color: #0056b3; /* Темніший синій при наведенні */
+}
+
+.custom-button:disabled {
+    background-color: #cccccc; /* Сірий фон, якщо кнопка неактивна */
+    cursor: not-allowed;
+    color: #666666; /* Сірий текст */
+}

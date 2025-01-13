@@ -6,7 +6,7 @@ export const TILE_SIZE = 100;
 
 export const BOARD_SIZE = 800;
 
-export function samePosition(p1: Position, p2: Position) : boolean {
+export function samePosition(p1: Position, p2: Position): boolean {
     return p1.x === p2.x && p1.y === p2.y;
 }
 
@@ -38,28 +38,148 @@ export interface Piece {
 }
 
 export const initialBoardState: Piece[] = [
-  { image: '/src/assets/images/pawn_g.png', position: { x: 0, y: 0 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 2, y: 0 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 4, y: 0 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 6, y: 0 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 1, y: 1 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 3, y: 1 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 5, y: 1 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 7, y: 1 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 0, y: 2 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 2, y: 2 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 4, y: 2 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_g.png', position: { x: 6, y: 2 }, type: PieceType.PAWN, team: TeamType.OUR },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 1, y: 5 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 3, y: 5 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 5, y: 5 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 7, y: 5 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 0, y: 6 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 2, y: 6 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 4, y: 6 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 6, y: 6 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 1, y: 7 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 3, y: 7 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 5, y: 7 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
-  { image: '/src/assets/images/pawn_r.png', position: { x: 7, y: 7 }, type: PieceType.PAWN, team: TeamType.OPPONENT },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 0, y: 0 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 2, y: 0 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 4, y: 0 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 6, y: 0 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 1, y: 1 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 3, y: 1 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 5, y: 1 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 7, y: 1 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 0, y: 2 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 2, y: 2 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 4, y: 2 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_g.png',
+        position: { x: 6, y: 2 },
+        type: PieceType.PAWN,
+        team: TeamType.OUR,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 1, y: 5 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 3, y: 5 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 5, y: 5 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 7, y: 5 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 0, y: 6 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 2, y: 6 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 4, y: 6 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 6, y: 6 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 1, y: 7 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 3, y: 7 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 5, y: 7 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
+    {
+        image: '/src/assets/images/pawn_r.png',
+        position: { x: 7, y: 7 },
+        type: PieceType.PAWN,
+        team: TeamType.OPPONENT,
+    },
 ];
