@@ -21,7 +21,7 @@ import {
 } from '../../referee/rules/GeneralRules.ts';
 import Tile from '../Tile/Tile';
 import './Chessboard.css';
-
+import Cookies from 'js-cookie';
 
 
 export default function Chessboard() {
@@ -33,7 +33,7 @@ export default function Chessboard() {
         y: -1,
     });
     // State to store the current board pieces and their positions.
-    const [pieces, setPieces] = useState<Piece[]>(initialBoardState);
+    const [pieces, setPieces] = useState<Piece[] >(initialBoardState);
     // State to keep track of whose turn it currently is (OUR team vs OPPONENT team).
     const [currentTeam, setCurrentTeam] = useState<TeamType>(TeamType.OUR);
     // State to store all pieces with mandatory captures.
@@ -49,32 +49,82 @@ export default function Chessboard() {
 
     const [connection, setConnection] = useState<HubConnection | null>(null);
 
+    const [gameStarted, setGameStarted] = useState(false);
+    const [gameEnded, setGameEnded] = useState(false);
+    const [winner, setWinner] = useState<TeamType | null>(null);
+
     const { gameId } = useParams();
+
+    const setConnectionId = () => {
+        if (connection?.connectionId) {
+            const expirationDate = new Date();
+            expirationDate.setFullYear(expirationDate.getFullYear() + 100);
+            Cookies.set('connectionId', connection.connectionId, {
+                expires: expirationDate,
+            });
+        }
+    };
+
 
     useEffect(() => {
         const newConnection = new HubConnectionBuilder()
-            .withUrl("http://localhost:5115/gameHub")
+            .withUrl('http://localhost:5115/gameHub')
             .withAutomaticReconnect()
             .build();
 
         setConnection(newConnection);
 
-        newConnection.start()
-            .then(() => {
-                console.log("Connected to game hub");
-                
-                // Підписка на оновлення стану гри
-                newConnection.on("GameStateUpdated", (newPieces, newCurrentTeam) => {
-                    setPieces(newPieces);
-                    setCurrentTeam(newCurrentTeam);
-                });
-            })
-            .catch(err => console.log("Error:", err));
+        newConnection.start().then(() => {
+            console.log('Connected to game hub');
+            
+            
+            // Спроба відновити з'єднання
+            const savedConnectionId = Cookies.get('connectionId');
+            console.log("trying to reconnect");
+            console.log(`saved connection ${savedConnectionId}`);
+            if (savedConnectionId) {
+                try {
+                    console.log("invoking backend for restore join");
+                    newConnection.invoke('RestoreJoin', savedConnectionId);
+                    setConnectionId();
+                } catch (error) {
+                    console.error('Failed to restore connection:', error);
+                }
+            }
+
+            // Приєднання до гри
+            if (gameId) {
+                newConnection.invoke('JoinGame', gameId)
+                    .catch(err => console.error('Error joining game:', err));
+            }
+
+            // Підписка на події гри
+            newConnection.on('GameStarted', (gameState) => {
+                console.log('Game started:', gameState);
+                setPieces(gameState.pieces);
+                setCurrentTeam(gameState.currentTeam);
+                setGameStarted(true);
+            });
+
+            newConnection.on('GameStateUpdated', (newPieces, newCurrentTeam) => {
+                setPieces(newPieces);
+                setCurrentTeam(newCurrentTeam);
+            });
+
+            newConnection.on('GameEnded', (winningTeam) => {
+                setGameEnded(true);
+                setWinner(winningTeam);
+            });
+
+            // Зберігаємо новий connectionId
+            setConnectionId();
+        })
+        .catch(err => console.error('SignalR Connection Error:', err));
 
         return () => {
             newConnection.stop();
         };
-    }, []);
+    }, [gameId]);
 
     // useEffect hook to calculate mandatory captures whenever the game state changes.
     useEffect(() => {
@@ -259,20 +309,19 @@ export default function Chessboard() {
                         );
                     }
 
-                    const nextTeam = currentTeam === TeamType.OPPONENT ? TeamType.OUR : TeamType.OPPONENT;
-                    
-                    const currentTeamString  = currentTeam ===TeamType.OUR ? 'OUR' : 'OPPONENT';
-                    //const nextTeamString = nextTeam === TeamType.OUR ? 'OUR' : 'OPPONENT';
+                    const currentTeamString = currentTeam === TeamType.OUR ? 'OUR' : 'OPPONENT';
 
-                    // Update piece state (e.g., promotion, next move, etc.)
                     updatedPieces = updatePiecesAfterMove(updatedPieces);
                     setPieces(updatedPieces);
 
-                    if (connection) {
-                        
-                        console.log(nextTeam + "---------------------------");
-                        connection.invoke("UpdateGameState", gameId, updatedPieces, currentTeamString)
-                            .catch(err => console.error("Error updating game state:", err));
+                    if (connection && gameId) {
+                        connection.invoke('UpdateGameState', 
+                            gameId,
+                            updatedPieces,
+                            currentTeamString,
+                            grabPosition,
+                            { x, y }
+                        ).catch(err => console.error('Error updating game state:', err));
                     }
 
                     // Check for additional capture moves
@@ -342,21 +391,33 @@ export default function Chessboard() {
 
     return (
         <>
-            <div className="game-info">
-                Turn: {currentTeam === TeamType.OUR ? 'Green' : 'Red'}
-            </div>
-            <div
-                onMouseMove={(e) => movePiece(e)}
-                onMouseDown={(e) => grabPiece(e)}
-                onMouseUp={(e) => dropPiece(e)}
-                onTouchStart={(e) => handleTouchStart(e)}
-                onTouchMove={(e) => handleTouchMove(e)}
-                onTouchEnd={(e) => handleTouchEnd(e)}
-                id="chessboard"
-                ref={chessboardRef}
-            >
-                {board}
-            </div>
+            {gameEnded ? (
+                <div className="game-ended">
+                    Game Over! Winner: {winner === TeamType.OUR ? 'Green' : 'Red'}
+                </div>
+            ) : !gameStarted ? (
+                <div className="waiting">
+                    Waiting for opponent...
+                </div>
+            ) : (
+                <>
+                    <div className="game-info">
+                        Turn: {currentTeam === TeamType.OUR ? 'Green' : 'Red'}
+                    </div>
+                    <div
+                        onMouseMove={(e) => movePiece(e)}
+                        onMouseDown={(e) => grabPiece(e)}
+                        onMouseUp={(e) => dropPiece(e)}
+                        onTouchStart={(e) => handleTouchStart(e)}
+                        onTouchMove={(e) => handleTouchMove(e)}
+                        onTouchEnd={(e) => handleTouchEnd(e)}
+                        id="chessboard"
+                        ref={chessboardRef}
+                    >
+                        {board}
+                    </div>
+                </>
+            )}
         </>
     );
 }
