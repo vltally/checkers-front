@@ -98,7 +98,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         try {
            
             const result = await fetch(
-                process.env.BACKEND_API_URL + 'api/User/refresh',
+                import.meta.env.BACKEND_API_URL + 'api/User/refresh',
 
                 {
                     method: 'POST',

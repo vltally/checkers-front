@@ -4,8 +4,9 @@ import './App.css';
 import { GlobleContext } from './context/Context';
 import Home from './pages/Home';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import { Play } from './pages/Play';
+import Register from './pages/Register';
+import Header from './components/Header';
 
 function App() {
     const [show, setShow] = useState<boolean>(false);
@@ -105,6 +106,7 @@ function App() {
 
     return (
         <>
+            <Header />
             <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />

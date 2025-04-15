@@ -7,10 +7,10 @@
     background-color: blue;
     touch-action: none;
     user-select: none;
-
+    margin-inline: auto;
 }
 #chessboard .tile {
-width: 100px;
+    width: 100px;
     height: 100px;
 }
 

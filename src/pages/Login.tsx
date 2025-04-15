@@ -1,11 +1,11 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { GlobleContext } from '../context/Context';
+import PasswordInputField from '../components/PasswordInputField';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import PasswordInputField from '../components/PasswordInputField';
+import { GlobleContext } from '../context/Context';
 
 const LoginPage: React.FC<{ register?: boolean }> = ({ register = false }) => {
     const { userDispatch } = useContext(GlobleContext);
@@ -101,17 +101,14 @@ const LoginPage: React.FC<{ register?: boolean }> = ({ register = false }) => {
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (passwordError || confirmPasswordError || usernameError) return;
-        if (register) {
-            fetchRegister();
-        } else {
-            fetchLogin();
-        }
+
+        fetchLogin();
     };
 
     const fetchLogin = async () => {
         try {
             const result = await fetch(
-                process.env.REACT_APP_API_URL + 'api/User/login',
+                import.meta.env.VITE_BACKEND_API_URL + 'api/User/login',
                 {
                     method: 'POST',
                     headers: {
@@ -142,28 +139,6 @@ const LoginPage: React.FC<{ register?: boolean }> = ({ register = false }) => {
         }
     };
 
-    const fetchRegister = async () => {
-        try {
-            const result = await fetch(
-                process.env.REACT_APP_API_URL + 'api/User/register',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        username: usernameInput,
-                        password: passwordInput.password,
-                    }),
-                }
-            ).then((res) => res.json());
-            alert(result.message);
-            navigate('/login');
-        } catch (error) {
-            alert(error);
-        }
-    };
-
     useEffect(() => {
         if (!register) {
             setConfirmPasswordError('');
@@ -181,17 +156,18 @@ const LoginPage: React.FC<{ register?: boolean }> = ({ register = false }) => {
                     </h1>
                     <form className="space-y-4" onSubmit={handleSubmit}>
                         <div>
-                            <Label htmlFor="email">Email</Label>
+                            <Label htmlFor="username">Username</Label>
                             <Input
-                                id="email"
-                                type="email"
-                                placeholder="you@example.com"
+                                id="username"
+                                type="text"
+                                placeholder="Username"
                                 value={usernameInput}
                                 onChange={handleUsername}
                                 required
                             />
                             <p className="text-danger">{usernameError}</p>
                         </div>
+
                         <div>
                             <PasswordInputField
                                 handlePasswordChange={handlePasswordChange}
