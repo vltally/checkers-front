@@ -14,6 +14,7 @@ export const Play: React.FC = () => {
     };
 
     const handlePrivateRoomRequest = (user: string) => {
+        console.log('handler started his work');
         signalRService?.privateRoomRequest({
             from: username,
             to: user,

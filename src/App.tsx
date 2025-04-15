@@ -1,12 +1,22 @@
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from './components/ui/dialog';
 import { useContext, useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router';
 import './App.css';
+import ChessboardOnline from './components/Chessboard/ChessboardOnline';
+import Header from './components/Header';
+import { Button } from './components/ui/button';
 import { GlobleContext } from './context/Context';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import { Play } from './pages/Play';
 import Register from './pages/Register';
-import Header from './components/Header';
 
 function App() {
     const [show, setShow] = useState<boolean>(false);
@@ -105,32 +115,80 @@ function App() {
     }, [message]);
 
     return (
-        <>
-            <Header />
-            <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route
-                    path="/play"
-                    element={
-                        isLogin ? (
-                            <Play />
-                        ) : (
-                            <div>
-                                <h2>
-                                    Please Login to play Online Or
-                                    <NavLink to={'/'}>
-                                        {' '}
-                                        Go to Home for the Single Player
-                                    </NavLink>
-                                </h2>
-                            </div>
-                        )
-                    }
-                />
-            </Routes>
-        </>
+        <div>
+            <div>
+                <Header />
+                {privateRoomInitiated.accepted &&
+                privateRoomInitiated.requested ? (
+                    <div className="d-flex flex-column align-items-center">
+                        <div className="mt-2">
+                            <h2>
+                                In A private Room{' '}
+                                {privateRoomInitiated.accepted} -{' '}
+                                {privateRoomInitiated.requested}
+                            </h2>
+                        </div>
+                        <div
+                            style={{
+                                width: '40vw',
+                                height: '70vh',
+                                display: 'flex',
+                            }}
+                        >
+                            <ChessboardOnline />
+                        </div>
+                        <Button onClick={handleClosePrivateRoom}>
+                            Close Private Room
+                        </Button>
+                    </div>
+                ) : (
+                    <Routes>
+                        <Route path="/" element={<Home />} />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route
+                            path="/play"
+                            element={
+                                isLogin ? (
+                                    <Play />
+                                ) : (
+                                    <div>
+                                        <h2>
+                                            Please Login to play Online Or
+                                            <NavLink to={'/'}>
+                                                {' '}
+                                                Go to Home for the Single Player
+                                            </NavLink>
+                                        </h2>
+                                    </div>
+                                )
+                            }
+                        />
+                    </Routes>
+                )}
+            </div>
+            <Dialog open={show} onOpenChange={() => {}}>
+                <DialogContent
+                    className="sm:max-w-md"
+                    onInteractOutside={(e) => e.preventDefault()}
+                >
+                    <DialogHeader>
+                        <DialogTitle>
+                            {message.from} is Requesting to play online
+                        </DialogTitle>
+                        <DialogDescription>
+                            Accept for online play or reject the request
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="destructive" onClick={handleReject}>
+                            Reject
+                        </Button>
+                        <Button onClick={handleAccept}>Accept</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
     );
 }
 

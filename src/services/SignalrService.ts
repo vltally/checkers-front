@@ -32,7 +32,7 @@ export class SignalRService {
         this.signalRConnection?.on(
             'OnlineUsers',
             (onlineusers: OnlineUser[]) => {
-                // console.log(onlineusers);
+                 console.log(onlineusers);
                 this.dispach({
                     type: 'SET_ONLINE_USERS',
                     payload: onlineusers,
@@ -42,7 +42,7 @@ export class SignalRService {
 
         this.signalRConnection?.on('RequestPrivateRoom', (message: Message) => {
             this.dispach({ type: 'REQUEST_PRIVATE_ROOM', payload: message });
-            // console.log(message);
+            console.log(message);
         });
 
         this.signalRConnection?.on(

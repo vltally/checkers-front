@@ -35,5 +35,6 @@ export interface OnlineUser {
 export interface PrivateRoomMessage {
     from: string;
     to: string;
-    position: number;
+    moveData: ChessMoveData;
 }
+
