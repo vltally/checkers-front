@@ -41,7 +41,12 @@ export const signalRConnectionReducer = (
                 signalRService: null,
                 privateRoomRequest: false,
                 privateRoomInitiated: { requested: '', accepted: '' },
-                privateRoomMsg: { from: '', to: '', position: 0 },
+                privateRoomMsg: {
+                    from: '',
+                    to: '',
+                    gameState: undefined,
+                    restart: undefined,
+                },
             };
         case 'SET_ONLINE_USERS':
             return { ...state, onlineUsers: action.payload };
@@ -71,7 +76,12 @@ export const signalRConnectionReducer = (
                 privateRoomRequest: false,
                 privateRoomInitiated: { requested: '', accepted: '' },
                 message: action.payload,
-                privateRoomMsg: { from: '', to: '', position: 0 },
+                privateRoomMsg: {
+                    from: '',
+                    to: '',
+                    gameState: undefined,
+                    restart: undefined,
+                },
             };
         case 'PRIVATE_ROOM_MESSAGE':
             return { ...state, privateRoomMsg: action.payload };

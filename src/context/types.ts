@@ -1,3 +1,4 @@
+import { Piece, TeamType } from '../Constants';
 import { SignalRService } from '../services/SignalrService';
 
 export interface UserState {
@@ -35,6 +36,18 @@ export interface OnlineUser {
 export interface PrivateRoomMessage {
     from: string;
     to: string;
-    moveData: ChessMoveData;
+    gameState?: GameStatePayload; // Optional for full game state
+    restart?: boolean; // Optional for restart requests
 }
 
+export interface GameStatePayload {
+    pieces: Piece[];
+    currentTeam: TeamType; // Whose turn it is in this state
+    gameOver: string | null; // Current game over status message
+    // Optional: moveNumber or timestamp for debugging/ordering
+}
+
+export interface GameStatus {
+    isGameOver: boolean;
+    message: string;
+}

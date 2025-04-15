@@ -20,7 +20,12 @@ const initialSignalRStatus: SignalRState = {
     privateRoomRequest: false,
     privateRoomInitiated: { requested: '', accepted: '' },
     message: { from: '', to: '', content: '' },
-    privateRoomMsg: { from: '', to: '', position: 0 },
+    privateRoomMsg: {
+        from: '',
+        to: '',
+        gameState: undefined,
+        restart: undefined,
+    },
 };
 
 export const GlobleContext = createContext<{
@@ -83,7 +88,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
                 });
                 if (refreshInterval) clearInterval(refreshInterval);
             }
-        }
+        } 
     };
 
     const decodeJwt = (token: string) => {
@@ -96,7 +101,6 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         const jwtToken = localStorage.getItem('jwtToken');
         const refreshToken = localStorage.getItem('refreshToken');
         try {
-           
             const result = await fetch(
                 import.meta.env.VITE_BACKEND_API_URL + 'api/User/refresh',
 

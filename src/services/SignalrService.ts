@@ -74,6 +74,7 @@ export class SignalRService {
         this.signalRConnection?.on(
             'NewPrivateMessage',
             (message: PrivateRoomMessage) => {
+                console.log(message)
                 this.dispach({
                     type: 'PRIVATE_ROOM_MESSAGE',
                     payload: message,

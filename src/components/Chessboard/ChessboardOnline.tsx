@@ -20,30 +20,11 @@ import {
 } from '../../referee/rules/GeneralRules.ts'; // Adjust path as needed
 import Tile from '../Tile/Tile.tsx'; // Adjust path as needed
 import './Chessboard.css';
+import { GameStatePayload, GameStatus, PrivateRoomMessage } from '../../context/types.ts';
 
 // --- Data Structures for State Synchronization ---
 
 // Payload containing the full game state sent over SignalR
-interface GameStatePayload {
-    pieces: Piece[];
-    currentTeam: TeamType; // Whose turn it is in this state
-    gameOver?: string | null; // Current game over status message
-    // Optional: moveNumber or timestamp for debugging/ordering
-}
-
-// Structure for SignalR messages using the full state approach
-interface ChessSignalRMessage {
-    from: string;
-    to: string;
-    gameState?: GameStatePayload; // Embed the full state payload
-    restart?: boolean; // Flag for restart requests
-}
-
-// Structure for the return value of checkGameState
-interface GameStatus {
-    isGameOver: boolean;
-    message: string | null;
-}
 
 // --- Chessboard Component ---
 
@@ -98,7 +79,7 @@ export default function Chessboard() {
             opponentUsername &&
             privateRoomMsg.from === opponentUsername
         ) {
-            const messageData = privateRoomMsg as ChessSignalRMessage;
+            const messageData = privateRoomMsg as PrivateRoomMessage;
             console.log('Received message from opponent:', messageData);
 
             if (messageData.gameState) {
@@ -161,7 +142,7 @@ export default function Chessboard() {
             );
             return;
         }
-        const message: ChessSignalRMessage = {
+        const message: PrivateRoomMessage = {
             from: username,
             to: opponentUsername,
             gameState: gameState,
@@ -534,7 +515,7 @@ export default function Chessboard() {
     // --- Restart Logic ---
     const handleRequestRestart = () => {
         if (!signalRService || !opponentUsername || !username) return;
-        const message: ChessSignalRMessage = {
+        const message: PrivateRoomMessage = {
             from: username,
             to: opponentUsername,
             restart: true,
