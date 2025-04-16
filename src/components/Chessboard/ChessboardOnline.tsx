@@ -12,6 +12,11 @@ import {
     VERTICAL_AXIS,
 } from '../../Constants.ts'; // Adjust path as needed
 import { GlobleContext } from '../../context/Context.tsx'; // Adjust path as needed
+import {
+    GameStatePayload,
+    GameStatus,
+    PrivateRoomMessage,
+} from '../../context/types.ts';
 import Referee from '../../referee/Referee.ts'; // Adjust path as needed
 import {
     findAllMandatoryCaptures,
@@ -20,7 +25,6 @@ import {
 } from '../../referee/rules/GeneralRules.ts'; // Adjust path as needed
 import Tile from '../Tile/Tile.tsx'; // Adjust path as needed
 import './Chessboard.css';
-import { GameStatePayload, GameStatus, PrivateRoomMessage } from '../../context/types.ts';
 
 // --- Data Structures for State Synchronization ---
 
@@ -84,7 +88,8 @@ export default function Chessboard() {
 
             if (messageData.gameState) {
                 handleOpponentStateUpdate(messageData.gameState);
-            } else if (messageData.restart) {
+            }
+            if (messageData.restart) {
                 console.log('Opponent requested/confirmed restart.');
                 handleRestartGame(); // Reset game locally on opponent's signal
             }
@@ -123,7 +128,7 @@ export default function Chessboard() {
         setPieces(receivedGameState.pieces);
         setCurrentTeam(receivedGameState.currentTeam); // Set turn based on received state
         setGameOver(receivedGameState.gameOver); // Update game over status
-        setShowRestartButton(!!receivedGameState.gameOver); // Show restart if game over
+        setShowRestartButton(!receivedGameState.gameOver); // Show restart if game over
 
         // --- Reset Local Helper State ---
         // These will be recalculated or managed based on the new state and subsequent actions.
@@ -131,6 +136,10 @@ export default function Chessboard() {
         // but we know whose turn it is. Mandatory captures are recalculated by useEffect.
         setIsMultipleCapture(false);
         setLastMovedPiece(null);
+
+        console.log('Received game state applied successfully.');
+        console.log('Current team after receiving state: ' + currentTeam);
+        console.log('Game over status after receiving state: ' + gameOver);
     };
 
     // --- Send State Function ---
@@ -148,7 +157,7 @@ export default function Chessboard() {
             gameState: gameState,
         };
 
-        console.log(gameState)
+        console.log(gameState);
         console.log('Sending game state:', message);
         signalRService.sendPrivateRooMessage(message);
     };
@@ -165,6 +174,10 @@ export default function Chessboard() {
         // 1. Check if the current team has any pieces left
         const teamPieces = currentPieces.filter(
             (p) => p.team === teamWhoseTurnItIs
+        );
+
+        console.log(
+            teamPieces.length + ' pieces left for ' + teamWhoseTurnItIs
         );
         if (teamPieces.length === 0) {
             const winner =
@@ -207,6 +220,8 @@ export default function Chessboard() {
                         currentPieces
                     );
 
+                    result.success = true; // Force success for testing
+
                     if (result.success) {
                         hasValidMove = true;
                         break;
@@ -241,6 +256,12 @@ export default function Chessboard() {
         const element = e.target as HTMLElement;
         const chessboard = chessboardRef.current;
 
+        console.log('Grab piece event triggered.');
+
+        console.log(
+            'currentTeam = ' + currentTeam + ' myTeamType ' + myTeamType
+        );
+        console.log('if statement ' + ' ' + gameOver + ' ' + chessboard);
         if (currentTeam !== myTeamType || gameOver || !chessboard) {
             return; // Not my turn, game over, or ref not ready
         }
@@ -257,6 +278,12 @@ export default function Chessboard() {
             const potentialGrabPos = { x: grabX, y: grabY };
             const piece = pieces.find((p) =>
                 samePosition(p.position, potentialGrabPos)
+            );
+
+            console.log('found piece ' + piece);
+
+            console.log(
+                'Can move my piecee' + !piece || piece.team !== myTeamType
             );
 
             if (!piece || piece.team !== myTeamType) return; // Not my piece
@@ -314,6 +341,19 @@ export default function Chessboard() {
     // Main function for handling player moves and updating state
     function dropPiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
+        console.log('Drop piece event triggered.');
+        console.log(
+            'active piece' +
+                activePiece +
+                ' chessboard' +
+                chessboard +
+                ' currentTeam' +
+                currentTeam +
+                ' myTeamType' +
+                myTeamType +
+                ' gameOver' +
+                gameOver
+        );
         if (
             !activePiece ||
             !chessboard ||
@@ -411,7 +451,12 @@ export default function Chessboard() {
                 }
 
                 // 3. Check if the game ended with this move
-                const gameStateResult = checkGameState(updatedPieces, currentTeam , username, opponentUsername);
+                const gameStateResult = checkGameState(
+                    updatedPieces,
+                    currentTeam,
+                    username,
+                    opponentUsername
+                );
 
                 // --- Prepare Full State Payload ---
                 const gameStatePayload: GameStatePayload = {

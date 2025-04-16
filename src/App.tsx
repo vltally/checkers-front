@@ -83,7 +83,7 @@ function App() {
                 });
             }
         }
-    }, [onlineUsers]);
+    }, [onlineUsers, privateRoomInitiated.accepted, privateRoomInitiated.requested, signalRDispatch, username]);
 
     useEffect(() => {
         if (privateRoomRequest) {
@@ -120,7 +120,7 @@ function App() {
                 <Header />
                 {privateRoomInitiated.accepted &&
                 privateRoomInitiated.requested ? (
-                    <div className="d-flex flex-column align-items-center">
+                    <div className="flex-col items-center justify-center">
                         <div className="mt-2">
                             <h2>
                                 In A private Room{' '}
@@ -128,13 +128,7 @@ function App() {
                                 {privateRoomInitiated.requested}
                             </h2>
                         </div>
-                        <div
-                            style={{
-                                width: '40vw',
-                                height: '70vh',
-                                display: 'flex',
-                            }}
-                        >
+                        <div>
                             <ChessboardOnline />
                         </div>
                         <Button onClick={handleClosePrivateRoom}>
