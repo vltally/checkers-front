@@ -42,9 +42,9 @@ export interface PrivateRoomMessage {
 
 export interface GameStatePayload {
     pieces: Piece[];
-    currentTeam: TeamType; // Whose turn it is in this state
-    gameOver: string | null; // Current game over status message
-    // Optional: moveNumber or timestamp for debugging/ordering
+    currentTeam: TeamType; 
+    isGameOver: boolean;
+    currentMessage: string | null; 
 }
 
 export interface GameStatus {

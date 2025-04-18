@@ -8,6 +8,7 @@
     touch-action: none;
     user-select: none;
     margin-inline: auto;
+    transition: transform 0.3s ease-in-out; /* Smooth movement */
 }
 #chessboard .tile {
     width: 100px;
@@ -20,4 +21,10 @@
 
 #chessboard .white-tile {
     background-color: #ebecd0;
+}
+
+.chess-piece {
+    position: absolute;
+    transition: transform 0.3s ease-in-out; /* Smooth movement */
+    z-index: 100;
 }

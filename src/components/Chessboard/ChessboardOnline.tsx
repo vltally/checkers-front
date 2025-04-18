@@ -15,6 +15,7 @@ import { GlobleContext } from '../../context/Context.tsx'; // Adjust path as nee
 import {
     GameStatePayload,
     GameStatus,
+    Message,
     PrivateRoomMessage,
 } from '../../context/types.ts';
 import Referee from '../../referee/Referee.ts'; // Adjust path as needed
@@ -43,7 +44,8 @@ export default function Chessboard() {
     const [mandatoryCaptures, setMandatoryCaptures] = useState<Position[]>([]);
     const [isMultipleCapture, setIsMultipleCapture] = useState(false); // Tracks if current player is in mid-multi-capture
     const [lastMovedPiece, setLastMovedPiece] = useState<Piece | null>(null); // For multi-capture UI constraint
-    const [gameOver, setGameOver] = useState<string | null>(null);
+    const [currentMessage, setCurrentMessage] = useState<string | null>(null);
+    const [isGameOver, setIsGameOver] = useState(false);
     const [showRestartButton, setShowRestartButton] = useState(false);
 
     // --- SignalR Integration & User Info ---
@@ -68,7 +70,8 @@ export default function Chessboard() {
     useEffect(() => {
         console.log('Room initialized or changed. Resetting board.');
         setCurrentTeam(TeamType.OUR); // Requester (OUR) always starts
-        setGameOver(null);
+        setCurrentMessage(null);
+        setIsGameOver(false);
         setShowRestartButton(false);
         setPieces(initialBoardState);
         setMandatoryCaptures([]);
@@ -93,7 +96,6 @@ export default function Chessboard() {
                 console.log('Opponent requested/confirmed restart.');
                 handleRestartGame(); // Reset game locally on opponent's signal
             }
-            // Consider clearing the message from context after processing
         }
     }, [privateRoomMsg, opponentUsername]); // Rerun when message or opponent changes
 
@@ -103,7 +105,7 @@ export default function Chessboard() {
     // --- Effect for Calculating Mandatory Captures ---
     // This runs whenever the board state (`pieces`) or the `currentTeam` changes.
     useEffect(() => {
-        if (!gameOver) {
+        if (!isGameOver) {
             // Only calculate if game is ongoing
             const captures = findAllMandatoryCaptures(pieces, currentTeam);
             // Update mandatory captures based on the current authoritative state
@@ -117,7 +119,23 @@ export default function Chessboard() {
         } else {
             setMandatoryCaptures([]); // Clear highlights if game is over
         }
-    }, [pieces, currentTeam, gameOver, myTeamType]); // Dependencies for recalculation
+    }, [pieces, currentTeam, isGameOver, myTeamType]); // Dependencies for recalculation
+
+    useEffect(() => {
+        if (isGameOver) {
+            console.log('Game is over. Closing private room...');
+            const message: Message = {
+                from: username,
+                to: opponentUsername,
+                content: 'ClosePrivateRoom',
+            };
+    
+            signalRService?.closePrivateRoom(message).catch((error) => {
+                console.error('Failed to close private room:', error);
+            });
+        }
+    }, [isGameOver, username, opponentUsername, signalRService]);
+
 
     // --- State Update Handler (Receiver Logic) ---
     // Handles receiving the full game state from the opponent
@@ -126,20 +144,15 @@ export default function Chessboard() {
 
         // --- Directly Update Local State ---
         setPieces(receivedGameState.pieces);
-        setCurrentTeam(receivedGameState.currentTeam); // Set turn based on received state
-        setGameOver(receivedGameState.gameOver); // Update game over status
-        setShowRestartButton(!receivedGameState.gameOver); // Show restart if game over
+        setCurrentTeam(receivedGameState.currentTeam);
+        setIsGameOver(receivedGameState.isGameOver);
+        setCurrentMessage(receivedGameState.currentMessage); // Update game over status
+        setShowRestartButton(receivedGameState.isGameOver); // Show restart if game over
 
-        // --- Reset Local Helper State ---
-        // These will be recalculated or managed based on the new state and subsequent actions.
-        // We don't know the opponent's exact multi-capture status from state alone,
-        // but we know whose turn it is. Mandatory captures are recalculated by useEffect.
         setIsMultipleCapture(false);
         setLastMovedPiece(null);
 
         console.log('Received game state applied successfully.');
-        console.log('Current team after receiving state: ' + currentTeam);
-        console.log('Game over status after receiving state: ' + gameOver);
     };
 
     // --- Send State Function ---
@@ -171,15 +184,25 @@ export default function Chessboard() {
         username: string,
         opponentUsername: string
     ): GameStatus => {
-        // 1. Check if the current team has any pieces left
-        const teamPieces = currentPieces.filter(
+        const currentTeamPieces = currentPieces.filter(
             (p) => p.team === teamWhoseTurnItIs
         );
-
-        console.log(
-            teamPieces.length + ' pieces left for ' + teamWhoseTurnItIs
+        const opponentTeamPieces = currentPieces.filter(
+            (p) => p.team !== teamWhoseTurnItIs
         );
-        if (teamPieces.length === 0) {
+    
+        // 1. Check if the opponent has any pieces left
+        if (opponentTeamPieces.length === 0) {
+            const winner =
+                teamWhoseTurnItIs === TeamType.OUR ? username : opponentUsername;
+            return {
+                isGameOver: true,
+                message: `Game Over! ${winner} wins! (Opponent has no pieces left)`,
+            };
+        }
+    
+        // 2. Check if the current team has any pieces left
+        if (currentTeamPieces.length === 0) {
             const winner =
                 teamWhoseTurnItIs === TeamType.OUR
                     ? opponentUsername
@@ -194,7 +217,7 @@ export default function Chessboard() {
         const referee = new Referee();
         let hasValidMove = false;
 
-        for (const piece of teamPieces) {
+        for (const piece of currentTeamPieces) {
             // Iterate over all possible board positions (8x8)
             for (let dx = -2; dx <= 2; dx++) {
                 for (let dy = -2; dy <= 2; dy++) {
@@ -243,10 +266,12 @@ export default function Chessboard() {
             };
         }
 
+        const currentTurnPlayer =
+            teamWhoseTurnItIs === TeamType.OUR ? opponentUsername : username;
         // Game continues
         return {
             isGameOver: false,
-            message: 'Game continues',
+            message: `Game continues. It's ${currentTurnPlayer}'s turn.`,
         };
     };
 
@@ -256,13 +281,7 @@ export default function Chessboard() {
         const element = e.target as HTMLElement;
         const chessboard = chessboardRef.current;
 
-        console.log('Grab piece event triggered.');
-
-        console.log(
-            'currentTeam = ' + currentTeam + ' myTeamType ' + myTeamType
-        );
-        console.log('if statement ' + ' ' + gameOver + ' ' + chessboard);
-        if (currentTeam !== myTeamType || gameOver || !chessboard) {
+        if (currentTeam !== myTeamType || !chessboard) {
             return; // Not my turn, game over, or ref not ready
         }
 
@@ -278,12 +297,6 @@ export default function Chessboard() {
             const potentialGrabPos = { x: grabX, y: grabY };
             const piece = pieces.find((p) =>
                 samePosition(p.position, potentialGrabPos)
-            );
-
-            console.log('found piece ' + piece);
-
-            console.log(
-                'Can move my piecee' + !piece || piece.team !== myTeamType
             );
 
             if (!piece || piece.team !== myTeamType) return; // Not my piece
@@ -341,25 +354,7 @@ export default function Chessboard() {
     // Main function for handling player moves and updating state
     function dropPiece(e: React.MouseEvent) {
         const chessboard = chessboardRef.current;
-        console.log('Drop piece event triggered.');
-        console.log(
-            'active piece' +
-                activePiece +
-                ' chessboard' +
-                chessboard +
-                ' currentTeam' +
-                currentTeam +
-                ' myTeamType' +
-                myTeamType +
-                ' gameOver' +
-                gameOver
-        );
-        if (
-            !activePiece ||
-            !chessboard ||
-            currentTeam !== myTeamType ||
-            gameOver
-        ) {
+        if (!activePiece || !chessboard || currentTeam !== myTeamType) {
             if (activePiece) {
                 // Reset piece visual if dropped improperly
                 activePiece.style.position = 'relative';
@@ -380,7 +375,7 @@ export default function Chessboard() {
 
         const currentPiece = pieces.find((p) =>
             samePosition(p.position, grabPosition)
-        );
+    );
 
         if (currentPiece) {
             // Validate the attempted move
@@ -407,7 +402,7 @@ export default function Chessboard() {
                 // 1. Calculate the updated pieces array
                 let updatedPieces = pieces.map((piece) => {
                     if (samePosition(piece.position, currentPiece.position)) {
-                        // TODO: Handle promotion type change if applicable
+                        
                         return { ...piece, position: dropPosition };
                     }
                     return piece;
@@ -458,21 +453,20 @@ export default function Chessboard() {
                     opponentUsername
                 );
 
-                // --- Prepare Full State Payload ---
                 const gameStatePayload: GameStatePayload = {
                     pieces: updatedPieces,
                     currentTeam: nextTeam,
-                    gameOver: gameStateResult.message,
+                    isGameOver: gameStateResult.isGameOver,
+                    currentMessage: gameStateResult.message,
                 };
 
-                // --- Send Full State via SignalR ---
                 sendGameStateViaSignalR(gameStatePayload);
 
-                // --- Update Local State to Match Sent State ---
                 setPieces(updatedPieces);
                 setCurrentTeam(nextTeam);
-                setGameOver(gameStateResult.message);
-                setShowRestartButton(gameStateResult.isGameOver);
+                setCurrentMessage(gameStateResult.message);
+                setIsGameOver(gameStateResult.isGameOver);
+                setShowRestartButton(isGameOver);
 
                 // Update local multi-capture UI state *after* main state updates
                 if (
@@ -578,7 +572,8 @@ export default function Chessboard() {
         setMandatoryCaptures([]);
         setIsMultipleCapture(false);
         setLastMovedPiece(null);
-        setGameOver(null);
+        setIsGameOver(false);
+        setCurrentMessage(null);
         setShowRestartButton(false);
         setActivePiece(null);
         setGrabPosition({ x: -1, y: -1 });
@@ -597,7 +592,7 @@ export default function Chessboard() {
 
             // Determine if the tile should be highlighted (mandatory move)
             let isHighlighted = false;
-            if (currentTeam === myTeamType && !gameOver) {
+            if (currentTeam === myTeamType && !isGameOver) {
                 if (isMultipleCapture && lastMovedPiece) {
                     // In multi-capture, only highlight the piece that MUST move
                     isHighlighted = samePosition(
@@ -624,14 +619,14 @@ export default function Chessboard() {
     }
 
     // Display text for whose turn it is or game over message
-    const turnText = gameOver
-        ? gameOver
+    const turnText = isGameOver
+        ? currentMessage // Use currentMessage when the game is over
         : !username || !opponentUsername
-        ? 'Connecting...'
+        ? 'Connecting...' // Show connecting message if usernames are not available
         : currentTeam === myTeamType
         ? `${username} (Your Turn)` +
-          (isMultipleCapture ? ' - Must Capture!' : '')
-        : `${opponentUsername}'s Turn`;
+          (isMultipleCapture ? ' - Must Capture!' : '') // Show "Your Turn" with optional capture message
+        : `${opponentUsername}'s Turn`; // Show opponent's turn
 
     return (
         <div className="flex flex-col items-center p-4 font-sans">

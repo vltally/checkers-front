@@ -50,7 +50,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         initialSignalRStatus
     );
 
-    let refreshInterval: NodeJS.Timer | null;
+    let refreshInterval: NodeJS.Timeout | null;
 
     const checkTokenExpiration = () => {
         if (userState.accessToken) {
@@ -74,7 +74,10 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         });
     };
 
+    
+
     const refreshToken = () => {
+        
         const jwtToken = localStorage.getItem('jwtToken');
         if (jwtToken) {
             const decoded = decodeJwt(jwtToken);
