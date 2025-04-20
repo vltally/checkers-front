@@ -1,4 +1,4 @@
-import { Piece, TeamType } from '../Constants';
+import { Piece, Position, TeamType } from '../Constants';
 import { SignalRService } from '../services/SignalrService';
 
 export interface UserState {
@@ -45,9 +45,14 @@ export interface GameStatePayload {
     currentTeam: TeamType; 
     isGameOver: boolean;
     currentMessage: string | null; 
+    fromPosition?: Position; 
+    toPosition?: Position;
+    isPromoted?: boolean;
+    winner?: string | null
 }
 
 export interface GameStatus {
     isGameOver: boolean;
     message: string;
+    winner: string | null; 
 }

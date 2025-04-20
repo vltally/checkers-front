@@ -5,6 +5,7 @@ import {
     HORIZONTAL_AXIS,
     initialBoardState,
     Piece,
+    PieceType,
     Position,
     samePosition,
     TeamType,
@@ -168,6 +169,7 @@ export default function Chessboard() {
             from: username,
             to: opponentUsername,
             gameState: gameState,
+            
         };
 
         console.log(gameState);
@@ -198,6 +200,7 @@ export default function Chessboard() {
             return {
                 isGameOver: true,
                 message: `Game Over! ${winner} wins! (Opponent has no pieces left)`,
+                winner: winner
             };
         }
     
@@ -210,6 +213,7 @@ export default function Chessboard() {
             return {
                 isGameOver: true,
                 message: `Game Over! ${winner} wins! (No pieces left)`,
+                winner: winner
             };
         }
 
@@ -263,6 +267,7 @@ export default function Chessboard() {
             return {
                 isGameOver: true,
                 message: `Game Over! ${winner} wins! (No valid moves left)`,
+                winner: winner
             };
         }
 
@@ -272,6 +277,7 @@ export default function Chessboard() {
         return {
             isGameOver: false,
             message: `Game continues. It's ${currentTurnPlayer}'s turn.`,
+            winner: null
         };
     };
 
@@ -388,6 +394,8 @@ export default function Chessboard() {
             );
 
             if (moveResult.success) {
+
+                
                 // --- Move was valid, calculate the resulting state ---
                 let wasCapture = !!moveResult.capturedPiece; // Check if referee reported capture
                 // Fallback check (useful if referee logic misses something)
@@ -407,6 +415,14 @@ export default function Chessboard() {
                     }
                     return piece;
                 });
+
+                const isPromoted = updatedPieces.some(
+                    (p) =>
+                        samePosition(p.position, dropPosition) &&
+                        p.type === PieceType.KING // Check if the piece was promoted
+                );
+
+                
                 // Remove the captured piece
                 if (moveResult.capturedPiece) {
                     updatedPieces = updatedPieces.filter(
@@ -457,7 +473,12 @@ export default function Chessboard() {
                     pieces: updatedPieces,
                     currentTeam: nextTeam,
                     isGameOver: gameStateResult.isGameOver,
+                    winner: gameStateResult.winner,
                     currentMessage: gameStateResult.message,
+                    fromPosition: grabPosition,
+                    toPosition: dropPosition,
+                    isPromoted: isPromoted
+                    
                 };
 
                 sendGameStateViaSignalR(gameStatePayload);
