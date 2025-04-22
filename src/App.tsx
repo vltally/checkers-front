@@ -1,3 +1,9 @@
+import { useContext, useEffect, useState } from 'react';
+import { NavLink, Route, Routes } from 'react-router';
+import './App.css';
+import ChessboardOnline from './components/Chessboard/ChessboardOnline';
+import Header from './components/Header';
+import { Button } from './components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -6,17 +12,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from './components/ui/dialog';
-import { useContext, useEffect, useState } from 'react';
-import { NavLink, Route, Routes } from 'react-router';
-import './App.css';
-import ChessboardOnline from './components/Chessboard/ChessboardOnline';
-import Header from './components/Header';
-import { Button } from './components/ui/button';
 import { GlobleContext } from './context/Context';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import { Play } from './pages/Play';
 import Register from './pages/Register';
+import ViewGames from './pages/View';
+import ViewGame from './pages/ViewGame';
 
 function App() {
     const [show, setShow] = useState<boolean>(false);
@@ -83,7 +85,13 @@ function App() {
                 });
             }
         }
-    }, [onlineUsers, privateRoomInitiated.accepted, privateRoomInitiated.requested, signalRDispatch, username]);
+    }, [
+        onlineUsers,
+        privateRoomInitiated.accepted,
+        privateRoomInitiated.requested,
+        signalRDispatch,
+        username,
+    ]);
 
     useEffect(() => {
         if (privateRoomRequest) {
@@ -137,7 +145,26 @@ function App() {
                     </div>
                 ) : (
                     <Routes>
+                        <Route path="/view/:roomId" element={<ViewGame />} />
                         <Route path="/" element={<Home />} />
+                        <Route
+                            path="/view"
+                            element={
+                                isLogin ? (
+                                    <ViewGames />
+                                ) : (
+                                    <div>
+                                        <h2>
+                                            Please Login to play Online Or
+                                            <NavLink to={'/'}>
+                                                {' '}
+                                                Go to Home for the Single Player
+                                            </NavLink>
+                                        </h2>
+                                    </div>
+                                )
+                            }
+                        />
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
                         <Route

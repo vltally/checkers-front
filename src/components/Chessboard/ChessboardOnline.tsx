@@ -130,13 +130,12 @@ export default function Chessboard() {
                 to: opponentUsername,
                 content: 'ClosePrivateRoom',
             };
-    
+
             signalRService?.closePrivateRoom(message).catch((error) => {
                 console.error('Failed to close private room:', error);
             });
         }
     }, [isGameOver, username, opponentUsername, signalRService]);
-
 
     // --- State Update Handler (Receiver Logic) ---
     // Handles receiving the full game state from the opponent
@@ -169,7 +168,6 @@ export default function Chessboard() {
             from: username,
             to: opponentUsername,
             gameState: gameState,
-            
         };
 
         console.log(gameState);
@@ -192,18 +190,20 @@ export default function Chessboard() {
         const opponentTeamPieces = currentPieces.filter(
             (p) => p.team !== teamWhoseTurnItIs
         );
-    
+
         // 1. Check if the opponent has any pieces left
         if (opponentTeamPieces.length === 0) {
             const winner =
-                teamWhoseTurnItIs === TeamType.OUR ? username : opponentUsername;
+                teamWhoseTurnItIs === TeamType.OUR
+                    ? username
+                    : opponentUsername;
             return {
                 isGameOver: true,
                 message: `Game Over! ${winner} wins! (Opponent has no pieces left)`,
-                winner: winner
+                winner: winner,
             };
         }
-    
+
         // 2. Check if the current team has any pieces left
         if (currentTeamPieces.length === 0) {
             const winner =
@@ -213,7 +213,7 @@ export default function Chessboard() {
             return {
                 isGameOver: true,
                 message: `Game Over! ${winner} wins! (No pieces left)`,
-                winner: winner
+                winner: winner,
             };
         }
 
@@ -267,7 +267,7 @@ export default function Chessboard() {
             return {
                 isGameOver: true,
                 message: `Game Over! ${winner} wins! (No valid moves left)`,
-                winner: winner
+                winner: winner,
             };
         }
 
@@ -277,7 +277,7 @@ export default function Chessboard() {
         return {
             isGameOver: false,
             message: `Game continues. It's ${currentTurnPlayer}'s turn.`,
-            winner: null
+            winner: null,
         };
     };
 
@@ -381,7 +381,7 @@ export default function Chessboard() {
 
         const currentPiece = pieces.find((p) =>
             samePosition(p.position, grabPosition)
-    );
+        );
 
         if (currentPiece) {
             // Validate the attempted move
@@ -394,8 +394,6 @@ export default function Chessboard() {
             );
 
             if (moveResult.success) {
-
-                
                 // --- Move was valid, calculate the resulting state ---
                 let wasCapture = !!moveResult.capturedPiece; // Check if referee reported capture
                 // Fallback check (useful if referee logic misses something)
@@ -410,19 +408,24 @@ export default function Chessboard() {
                 // 1. Calculate the updated pieces array
                 let updatedPieces = pieces.map((piece) => {
                     if (samePosition(piece.position, currentPiece.position)) {
-                        
                         return { ...piece, position: dropPosition };
                     }
                     return piece;
                 });
 
-                const isPromoted = updatedPieces.some(
-                    (p) =>
-                        samePosition(p.position, dropPosition) &&
-                        p.type === PieceType.KING // Check if the piece was promoted
-                );
+                // const isPromoted =
+                //     pieces.some(
+                //         (p) =>
+                //             samePosition(p.position, grabPosition) && // Фігура на попередній позиції
+                //             p.type !== PieceType.KING // Вона не була дамкою
+                //     ) &&
+                //     updatedPieces.some(
+                //         (p) =>
+                //             samePosition(p.position, dropPosition) && // Фігура на новій позиції
+                //             p.type === PieceType.KING // Вона стала дамкою
+                //     );
+                const isPromoted = false;
 
-                
                 // Remove the captured piece
                 if (moveResult.capturedPiece) {
                     updatedPieces = updatedPieces.filter(
@@ -477,8 +480,7 @@ export default function Chessboard() {
                     currentMessage: gameStateResult.message,
                     fromPosition: grabPosition,
                     toPosition: dropPosition,
-                    isPromoted: isPromoted
-                    
+                    isPromoted: isPromoted,
                 };
 
                 sendGameStateViaSignalR(gameStatePayload);

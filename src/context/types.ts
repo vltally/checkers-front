@@ -42,17 +42,38 @@ export interface PrivateRoomMessage {
 
 export interface GameStatePayload {
     pieces: Piece[];
-    currentTeam: TeamType; 
+    currentTeam: TeamType;
     isGameOver: boolean;
-    currentMessage: string | null; 
-    fromPosition?: Position; 
+    currentMessage: string | null;
+    fromPosition?: Position;
     toPosition?: Position;
     isPromoted?: boolean;
-    winner?: string | null
+    winner?: string | null;
 }
 
 export interface GameStatus {
     isGameOver: boolean;
     message: string;
-    winner: string | null; 
+    winner: string | null;
+}
+
+export interface GameDetails {
+    roomId: string;
+    player1: string;
+    player2: string;
+    startTime: string;
+    endTime?: string | null;
+    winner?: string | null;
+    moves? : Move[];
+}
+
+export interface Move {
+    id: number;
+    moveNumber: number;
+    from: Position;
+    to: Position;
+    team: TeamType;
+    pieceType: number;
+    isPromoted: boolean;
+    timestamp: string;
 }
