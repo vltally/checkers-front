@@ -20,6 +20,7 @@ export interface SignalRState {
     privateRoomInitiated: { requested: string; accepted: string };
     message: Message;
     privateRoomMsg: PrivateRoomMessage;
+    winner?: string | null;
 }
 
 export interface Message {

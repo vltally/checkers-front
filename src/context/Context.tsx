@@ -7,11 +7,73 @@ interface GlobalStateProps {
     children: ReactNode;
 }
 
-const initialUserState: UserState = {
-    isLogin: false,
-    username: '',
-    accessToken: '',
-    refreshToken: '',
+// const initialUserState: UserState = {
+//     isLogin: false,
+//     username: '',
+//     accessToken: '',
+//     refreshToken: '',
+// };
+
+// const getInitialUserState = (): UserState => {
+//     const jwtToken = localStorage.getItem('jwtToken') || '';
+//     const refreshToken = localStorage.getItem('refreshToken') || '';
+//     const username = localStorage.getItem('username') || '';
+//     return {
+//         isLogin: !!jwtToken,
+//         username,
+//         accessToken: jwtToken,
+//         refreshToken,
+//     };
+// };
+
+const getInitialUserState = (): UserState => {
+    const jwtToken = localStorage.getItem('jwtToken') || '';
+    const refreshToken = localStorage.getItem('refreshToken') || '';
+    const username = localStorage.getItem('username') || '';
+
+    // If there's no token, user is not logged in.
+    if (!jwtToken) {
+        return {
+            isLogin: false,
+            username: '',
+            accessToken: '',
+            refreshToken: '',
+        };
+    }
+
+    try {
+        const base64Url = jwtToken.split('.')[1];
+        const base64 = base64Url.replace('-', '+').replace('_', '/');
+        const decoded = JSON.parse(atob(base64));
+        // Check if token is expired
+        if (decoded.exp * 1000 < Date.now()) {
+            // Token expired, cleanup storage and return logged out state.
+            localStorage.removeItem('jwtToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('username');
+            return {
+                isLogin: false,
+                username: '',
+                accessToken: '',
+                refreshToken: '',
+            };
+        }
+    } catch (error) {
+        console.error('Failed to decode JWT:', error);
+        return {
+            isLogin: false,
+            username: '',
+            accessToken: '',
+            refreshToken: '',
+        };
+    }
+
+    return {
+        isLogin: true,
+        username,
+        accessToken: jwtToken,
+        refreshToken,
+    };
 };
 
 const initialSignalRStatus: SignalRState = {
@@ -34,7 +96,8 @@ export const GlobleContext = createContext<{
     signalRState: SignalRState;
     signalRDispatch: React.Dispatch<Action>;
 }>({
-    userState: initialUserState,
+    //userState: initialUserState,
+    userState: getInitialUserState(),
     userDispatch: () => undefined,
     signalRState: initialSignalRStatus,
     signalRDispatch: () => undefined,
@@ -43,7 +106,8 @@ export const GlobleContext = createContext<{
 const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
     const [userState, userDispatch] = useReducer(
         userControlReducer,
-        initialUserState
+        //initialUserState
+        getInitialUserState()
     );
     const [signalRState, signalRDispatch] = useReducer(
         signalRConnectionReducer,
@@ -56,7 +120,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         if (userState.accessToken) {
             if (!refreshInterval) {
                 // if not defined
-                refreshInterval = setInterval(refreshToken, 100000); // callback every 100s
+                refreshInterval = setInterval(refreshToken, 10000); // callback every 25s
                 startSignalRConnection(); // After user loged in call this function
             }
         }
@@ -74,10 +138,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         });
     };
 
-    
-
     const refreshToken = () => {
-        
         const jwtToken = localStorage.getItem('jwtToken');
         if (jwtToken) {
             const decoded = decodeJwt(jwtToken);
@@ -91,7 +152,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
                 });
                 if (refreshInterval) clearInterval(refreshInterval);
             }
-        } 
+        }
     };
 
     const decodeJwt = (token: string) => {
@@ -122,6 +183,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
             if (result.accessToken) {
                 localStorage.setItem('jwtToken', result.accessToken);
                 localStorage.setItem('refreshToken', result.refreshToken);
+                localStorage.setItem('username', userState.username);
                 userDispatch({
                     type: 'REFRESH_TOKEN',
                     payload: {

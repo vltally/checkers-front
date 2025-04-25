@@ -71,14 +71,18 @@ function App() {
     };
 
     useEffect(() => {
-        if (privateRoomInitiated.accepted && privateRoomInitiated.requested) {
-            const patner =
+        if (
+            onlineUsers.length > 0 && // only check if onlineUsers is non-empty
+            privateRoomInitiated.accepted &&
+            privateRoomInitiated.requested
+        ) {
+            const partner =
                 privateRoomInitiated.accepted !== username
                     ? privateRoomInitiated.accepted
                     : privateRoomInitiated.requested;
-            const result = onlineUsers.find((user) => user.key === patner);
+            const result = onlineUsers.find((user) => user.key === partner);
             if (!result) {
-                alert(`${patner} Connection lost`);
+                alert(`${partner} Connection lost`);
                 signalRDispatch({
                     type: 'CLOSE_PRIVATE_ROOM',
                     payload: { from: '', to: '', content: '' },
@@ -114,13 +118,18 @@ function App() {
             message.to === username
         ) {
             alert(`${message.from} is logged out`);
-        } else if (
-            message.content === 'ClosePrivateRoom' &&
-            message.from !== username
-        ) {
-            alert(`${message.from} is closed the private room`);
+        } else if (message.content === 'ClosePrivateRoom') {
+            // Only show alert for the user who didn't initiate the closure
+            if (message.from !== username) {
+                alert(`${message.from} is closed the private room`);
+            }
+            // Clear private room state after handling
+            signalRDispatch({
+                type: 'CLOSE_PRIVATE_ROOM',
+                payload: { from: '', to: '', content: '' },
+            });
         }
-    }, [message]);
+    }, [message, username, userDispatch, signalRService, signalRDispatch]);
 
     return (
         <div>

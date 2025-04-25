@@ -1,6 +1,13 @@
 import React, { useContext } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from '../components/ui/card';
 import { GlobleContext } from '../context/Context';
 
 export const Play: React.FC = () => {
@@ -23,46 +30,41 @@ export const Play: React.FC = () => {
     };
 
     return (
-        <div className="flex-auto">
+        <div className="flex-auto p-4">
             {handleOnlineUsers().length > 0 ? (
                 <>
-                    <h1>Online Users</h1>
-                    <ol className="list-group list-group-numbered">
+                    <h1 className="text-2xl font-bold mb-4">Online Users</h1>
+                    <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                         {handleOnlineUsers().map((user, index) => (
-                            <li
-                                className="list-group-item d-flex justify-content-between align-items-start"
-                                key={index}
-                            >
-                                <div className="ms-2 me-auto">
-                                    <div className="fw-bold">{user.key}</div>
+                            <Card key={index} className="shadow">
+                                <CardHeader>
+                                    <CardTitle>{user.key}</CardTitle>
+                                </CardHeader>
+                                <CardContent>
                                     {user.value ? (
-                                        <span
-                                            className="fw-bold"
-                                            style={{ color: '#ff2200' }}
-                                        >
-                                            In a private Room
-                                        </span>
+                                        <p className="text-red-500 font-semibold">
+                                            In a Private Room
+                                        </p>
                                     ) : (
-                                        <span
-                                            className="fw-bold"
-                                            style={{ color: '#6fff00' }}
-                                        >
+                                        <p className="text-green-500 font-semibold">
                                             Online
-                                        </span>
+                                        </p>
                                     )}
-                                </div>
-                                <Button
-                                    disabled={user.value}
-                                    className="fs-5 fw-bold"
-                                    onClick={() =>
-                                        handlePrivateRoomRequest(user.key)
-                                    }
-                                >
-                                    Play
-                                </Button>
-                            </li>
+                                </CardContent>
+                                <CardFooter>
+                                    <Button
+                                        disabled={user.value}
+                                        className="w-full"
+                                        onClick={() =>
+                                            handlePrivateRoomRequest(user.key)
+                                        }
+                                    >
+                                        Play
+                                    </Button>
+                                </CardFooter>
+                            </Card>
                         ))}
-                    </ol>
+                    </div>
                 </>
             ) : (
                 <div className="px-5 my-10">

@@ -5,7 +5,6 @@ import {
     HORIZONTAL_AXIS,
     initialBoardState,
     Piece,
-    PieceType,
     Position,
     samePosition,
     TeamType,
@@ -25,6 +24,7 @@ import {
     hasMoreCaptures,
     updatePiecesAfterMove,
 } from '../../referee/rules/GeneralRules.ts'; // Adjust path as needed
+import GameOverModal from '../Modals/GameOverModal.tsx';
 import Tile from '../Tile/Tile.tsx'; // Adjust path as needed
 import './Chessboard.css';
 
@@ -48,8 +48,10 @@ export default function Chessboard() {
     const [currentMessage, setCurrentMessage] = useState<string | null>(null);
     const [isGameOver, setIsGameOver] = useState(false);
     const [showRestartButton, setShowRestartButton] = useState(false);
-
+    const [gameWinner, setGameWinner] = useState<string | null>(null);
     // --- SignalR Integration & User Info ---
+    // Add this state near your other state declarations
+    const [shouldCloseRoom, setShouldCloseRoom] = useState(false);
 
     const {
         userState: { username },
@@ -123,20 +125,29 @@ export default function Chessboard() {
     }, [pieces, currentTeam, isGameOver, myTeamType]); // Dependencies for recalculation
 
     useEffect(() => {
-        if (isGameOver) {
-            console.log('Game is over. Closing private room...');
+        if (shouldCloseRoom) {
+            console.log('Closing private room...');
+
             const message: Message = {
                 from: username,
                 to: opponentUsername,
                 content: 'ClosePrivateRoom',
             };
 
-            signalRService?.closePrivateRoom(message).catch((error) => {
-                console.error('Failed to close private room:', error);
-            });
+            signalRService
+                ?.closePrivateRoom(message)
+                .catch((error) => {
+                    console.error('Failed to close private room:', error);
+                })
+                .finally(() => {
+                    setShouldCloseRoom(false); // Reset the state
+                });
         }
-    }, [isGameOver, username, opponentUsername, signalRService]);
+    }, [shouldCloseRoom, username, opponentUsername, signalRService]);
 
+    const handleLeaveRoom = () => {
+        setShouldCloseRoom(true);
+    };
     // --- State Update Handler (Receiver Logic) ---
     // Handles receiving the full game state from the opponent
     const handleOpponentStateUpdate = (receivedGameState: GameStatePayload) => {
@@ -472,6 +483,14 @@ export default function Chessboard() {
                     opponentUsername
                 );
 
+                setIsGameOver(gameStateResult.isGameOver);
+                setCurrentMessage(gameStateResult.message);
+                if (gameStateResult.isGameOver && gameStateResult.winner) {
+                    setGameWinner(gameStateResult.winner);
+                } else {
+                    setGameWinner(null);
+                }
+
                 const gameStatePayload: GameStatePayload = {
                     pieces: updatedPieces,
                     currentTeam: nextTeam,
@@ -683,6 +702,16 @@ export default function Chessboard() {
                 >
                     Restart Game
                 </button>
+            )}
+            {isGameOver && (
+                <GameOverModal
+                    open={isGameOver}
+                    winner={gameWinner}
+                    message={currentMessage || ''}
+                    onRestart={handleRequestRestart}
+                    onClose={handleLeaveRoom}
+                    onLeaveRoom={handleLeaveRoom} 
+                />
             )}
         </div>
     );

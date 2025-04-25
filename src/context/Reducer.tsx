@@ -76,6 +76,7 @@ export const signalRConnectionReducer = (
                 privateRoomRequest: false,
                 privateRoomInitiated: { requested: '', accepted: '' },
                 message: action.payload,
+                winner: action.payload.content,
                 privateRoomMsg: {
                     from: '',
                     to: '',

@@ -123,6 +123,7 @@ const LoginPage: React.FC<{ register?: boolean }> = ({ register = false }) => {
             if (result.accessToken) {
                 localStorage.setItem('jwtToken', result.accessToken);
                 localStorage.setItem('refreshToken', result.refreshToken);
+                localStorage.setItem('username', usernameInput); //
                 userDispatch({
                     type: 'LOGIN',
                     payload: {
