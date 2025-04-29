@@ -234,7 +234,9 @@ export default function Chessboard() {
     };
 
     const checkForValidMoves = (
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         currentTeamPieces: Piece[],
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         allPieces: Piece[]
     ): boolean => {
         // for (const piece of currentTeamPieces) {

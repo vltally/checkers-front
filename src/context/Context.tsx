@@ -90,6 +90,7 @@ const initialSignalRStatus: SignalRState = {
     },
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const GlobleContext = createContext<{
     userState: UserState;
     userDispatch: React.Dispatch<Action>;
@@ -116,6 +117,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
 
     let refreshInterval: NodeJS.Timeout | null;
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     const checkTokenExpiration = () => {
         if (userState.accessToken) {
             if (!refreshInterval) {
@@ -200,7 +202,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
 
     useEffect(() => {
         if (userState.isLogin) checkTokenExpiration();
-    }, [userState.isLogin]);
+    }, [checkTokenExpiration, userState.isLogin]);
 
     return (
         <GlobleContext.Provider
