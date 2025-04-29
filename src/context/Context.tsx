@@ -115,18 +115,27 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         initialSignalRStatus
     );
 
-    let refreshInterval: NodeJS.Timeout | null;
+    let refreshInterval: NodeJS.Timeout | null = null;
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const checkTokenExpiration = () => {
+    useEffect(() => {
         if (userState.accessToken) {
-            if (!refreshInterval) {
-                // if not defined
-                refreshInterval = setInterval(refreshToken, 10000); // callback every 25s
-                startSignalRConnection(); // After user loged in call this function
+            // Start SignalR connection only if it doesn't exist
+            if (!signalRState.signalRService) {
+                startSignalRConnection();
             }
+
+            // Check token expiration every 12 seconds
+            refreshInterval = setInterval(refreshToken, 12000);
+
+            // Cleanup function
+            return () => {
+                if (refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                }
+            };
         }
-    };
+    }, [userState.accessToken, signalRState.signalRService]);
 
     const startSignalRConnection = () => {
         const signalRService = new SignalRService(
@@ -135,7 +144,7 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         );
         signalRService.createUserRoomConnection();
         signalRDispatch({
-            type: 'SET_SIGNALR_SERVICE',
+            type: 'SET_SIGNALR_CONNECTION',
             payload: signalRService,
         });
     };
@@ -143,17 +152,29 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
     const refreshToken = () => {
         const jwtToken = localStorage.getItem('jwtToken');
         if (jwtToken) {
-            const decoded = decodeJwt(jwtToken);
-            if (decoded.exp * 1000 > Date.now()) {
-                fetchRefreshToken();
-            } else {
-                userDispatch({ type: 'LOGOUT', payload: null });
-                signalRDispatch({
-                    type: 'REMOVE_SIGNALR_CONNECTION',
-                    payload: null,
-                });
-                if (refreshInterval) clearInterval(refreshInterval);
+            try {
+                const decoded = decodeJwt(jwtToken);
+                // Refresh if token expires in less than 10 minutes
+                if (decoded.exp * 1000 < Date.now() + 600000) {
+                    console.log('Refreshing token...');
+                    fetchRefreshToken();
+                }
+            } catch (error) {
+                console.error('Error decoding token:', error);
+                handleLogout();
             }
+        }
+    };
+
+    const handleLogout = () => {
+        userDispatch({ type: 'LOGOUT', payload: null });
+        signalRDispatch({
+            type: 'REMOVE_SIGNALR_CONNECTION',
+            payload: null,
+        });
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
         }
     };
 
@@ -169,7 +190,6 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
         try {
             const result = await fetch(
                 import.meta.env.VITE_BACKEND_API_URL + 'api/User/refresh',
-
                 {
                     method: 'POST',
                     headers: {
@@ -187,22 +207,24 @@ const GlobleState: React.FC<GlobalStateProps> = ({ children }) => {
                 localStorage.setItem('refreshToken', result.refreshToken);
                 localStorage.setItem('username', userState.username);
                 userDispatch({
-                    type: 'REFRESH_TOKEN',
+                    type: 'LOGIN',
                     payload: {
+                        isLogin: true,
+                        username: userState.username,
                         accessToken: result.accessToken,
                         refreshToken: result.refreshToken,
                     },
                 });
+                console.log('Token refreshed successfully');
+            } else {
+                console.error('Failed to refresh token');
+                handleLogout();
             }
         } catch (error) {
-            // alert(error);
-            console.log(error);
+            console.error('Error refreshing token:', error);
+            handleLogout();
         }
     };
-
-    useEffect(() => {
-        if (userState.isLogin) checkTokenExpiration();
-    }, [checkTokenExpiration, userState.isLogin]);
 
     return (
         <GlobleContext.Provider

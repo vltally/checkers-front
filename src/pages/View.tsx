@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import {
     Card,
@@ -9,8 +10,6 @@ import {
 import { Skeleton } from '../components/ui/skeleton';
 import { GlobleContext } from '../context/Context';
 import { GameDetails } from '../context/types';
-import { useNavigate } from 'react-router';
-
 
 const ViewGames: React.FC = () => {
     const navigate = useNavigate();
@@ -42,8 +41,10 @@ const ViewGames: React.FC = () => {
 
                 const data: GameDetails[] = await response.json();
                 setGames(data);
-            } catch (err: any) {
-                setError(err.message || 'Something went wrong');
+            } catch (err: unknown) {
+                setError(
+                    err instanceof Error ? err.message : 'Something went wrong'
+                );
             } finally {
                 setLoading(false);
             }

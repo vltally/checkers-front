@@ -1,11 +1,22 @@
-import { Action, SignalRState, UserState } from './types';
+import {
+    Action,
+    Message,
+    SignalRService,
+    SignalRState,
+    UserState,
+} from './types';
 
 export const userControlReducer = (
     state: UserState,
     action: Action
 ): UserState => {
+    if (!('type' in action)) return state;
+
     switch (action.type) {
         case 'LOGIN':
+        case 'REFRESH_TOKEN':
+            if (!action.payload || !('username' in action.payload))
+                return state;
             return {
                 ...state,
                 isLogin: true,
@@ -16,12 +27,13 @@ export const userControlReducer = (
         case 'LOGOUT':
             localStorage.removeItem('jwtToken');
             localStorage.removeItem('refreshToken');
-            return { ...state, isLogin: false, username: '' };
-        case 'REFRESH_TOKEN':
+            localStorage.removeItem('username');
             return {
                 ...state,
-                accessToken: action.payload.accessToken,
-                refreshToken: action.payload.refreshToken,
+                isLogin: false,
+                username: '',
+                accessToken: '',
+                refreshToken: '',
             };
         default:
             return state;
@@ -32,9 +44,19 @@ export const signalRConnectionReducer = (
     state: SignalRState,
     action: Action
 ): SignalRState => {
+    if (!('type' in action)) return state;
+
     switch (action.type) {
-        case 'SET_SIGNALR_SERVICE':
-            return { ...state, signalRService: action.payload };
+        case 'SET_SIGNALR_CONNECTION':
+            if (
+                !action.payload ||
+                !('createUserRoomConnection' in action.payload)
+            )
+                return state;
+            return {
+                ...state,
+                signalRService: action.payload as SignalRService,
+            };
         case 'REMOVE_SIGNALR_CONNECTION':
             return {
                 ...state,
@@ -48,35 +70,37 @@ export const signalRConnectionReducer = (
                     restart: undefined,
                 },
             };
-        case 'SET_ONLINE_USERS':
-            return { ...state, onlineUsers: action.payload };
+        case 'UPDATE_ONLINE_USERS':
+            if (!action.payload || !('onlineUsers' in action.payload))
+                return state;
+            return { ...state, onlineUsers: action.payload.onlineUsers };
         case 'REQUEST_PRIVATE_ROOM':
-            return {
-                ...state,
-                privateRoomRequest: true,
-                message: action.payload,
-            };
         case 'REJECT_PRIVATE_ROOM_REQUEST':
+            if (!action.payload || !('from' in action.payload)) return state;
             return {
                 ...state,
-                privateRoomRequest: false,
-                message: action.payload,
+                privateRoomRequest: action.type === 'REQUEST_PRIVATE_ROOM',
+                message: action.payload as Message,
             };
-        case 'OPEN_PRIVATE_ROOM':
+        case 'OPEN_PRIVATE_ROOM': {
+            if (!action.payload || !('from' in action.payload)) return state;
+            const message = action.payload as Message;
             return {
                 ...state,
                 privateRoomInitiated: {
-                    requested: action.payload.from,
-                    accepted: action.payload.to,
+                    requested: message.from,
+                    accepted: message.to,
                 },
             };
+        }
         case 'CLOSE_PRIVATE_ROOM':
+            if (!action.payload || !('from' in action.payload)) return state;
             return {
                 ...state,
                 privateRoomRequest: false,
                 privateRoomInitiated: { requested: '', accepted: '' },
-                message: action.payload,
-                winner: action.payload.content,
+                message: action.payload as Message,
+                winner: (action.payload as Message).content,
                 privateRoomMsg: {
                     from: '',
                     to: '',
@@ -85,6 +109,7 @@ export const signalRConnectionReducer = (
                 },
             };
         case 'PRIVATE_ROOM_MESSAGE':
+            if (!action.payload || !('from' in action.payload)) return state;
             return { ...state, privateRoomMsg: action.payload };
         default:
             return state;

@@ -1,5 +1,5 @@
 import { Piece, Position, TeamType } from '../Constants';
-import { SignalRService } from '../services/SignalrService';
+export { SignalRService } from '../services/SignalrService';
 
 export interface UserState {
     isLogin: boolean;
@@ -8,9 +8,9 @@ export interface UserState {
     refreshToken: string;
 }
 
-export interface Action {
-    type: string;
-    payload: any;
+export interface UserAction {
+    type: 'LOGIN' | 'LOGOUT' | 'REFRESH_TOKEN';
+    payload: UserState | null;
 }
 
 export interface SignalRState {
@@ -21,6 +21,25 @@ export interface SignalRState {
     message: Message;
     privateRoomMsg: PrivateRoomMessage;
     winner?: string | null;
+}
+
+export interface SignalRAction {
+    type:
+        | 'SET_SIGNALR_CONNECTION'
+        | 'REMOVE_SIGNALR_CONNECTION'
+        | 'UPDATE_ONLINE_USERS'
+        | 'OPEN_PRIVATE_ROOM'
+        | 'CLOSE_PRIVATE_ROOM'
+        | 'REJECT_PRIVATE_ROOM_REQUEST'
+        | 'REQUEST_PRIVATE_ROOM'
+        | 'PRIVATE_ROOM_MESSAGE';
+    payload:
+        | SignalRState
+        | Message
+        | PrivateRoomMessage
+        | SignalRService
+        | { onlineUsers: OnlineUser[] }
+        | null;
 }
 
 export interface Message {
@@ -65,8 +84,15 @@ export interface GameDetails {
     startTime: string;
     endTime?: string | null;
     winner?: string | null;
-    moves? : Move[];
+    moves?: Move[];
 }
+
+export interface GameAction {
+    type: 'UPDATE_GAME_STATE' | 'RESET_GAME';
+    payload: GameStatePayload | GameStatus | null;
+}
+
+export type Action = UserAction | SignalRAction | GameAction;
 
 export interface Move {
     id: number;

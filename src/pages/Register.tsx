@@ -8,7 +8,7 @@ import { GlobleContext } from '../context/Context';
 
 export default function SignUpPage() {
     const navigate = useNavigate();
-    const { userDispatch } = useContext(GlobleContext);
+    useContext(GlobleContext);
 
     const [usernameInput, setUsernameInput] = useState('');
     const [passwordInput, setPasswordInput] = useState({

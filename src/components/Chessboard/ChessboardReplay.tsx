@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 import React, { useEffect, useState } from 'react';
 import {
     initialBoardState,
@@ -28,10 +29,9 @@ const ChessboardReplay: React.FC<Props> = ({ moves }) => {
     const [pieces, setPieces] = useState<Piece[]>(initialBoardState);
     const [highlightedTiles, setHighlightedTiles] = useState<Position[]>([]);
 
-    const referee = new Referee();
-
     // Generate board states along with corresponding turn per move
     useEffect(() => {
+        const referee = new Referee();
         const generateBoardStates = () => {
             const history: BoardHistoryEntry[] = [];
             let currentBoard = [...initialBoardState];

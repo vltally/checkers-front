@@ -234,39 +234,38 @@ export default function Chessboard() {
     };
 
     const checkForValidMoves = (
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         currentTeamPieces: Piece[],
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
         allPieces: Piece[]
     ): boolean => {
-        // for (const piece of currentTeamPieces) {
-        //     for (let dx = -2; dx <= 2; dx++) {
-        //         for (let dy = -2; dy <= 2; dy++) {
-        //             if (dx === 0 && dy === 0) continue;
+        for (const piece of currentTeamPieces) {
+            for (let dx = -2; dx <= 2; dx++) {
+                for (let dy = -2; dy <= 2; dy++) {
+                    if (dx === 0 && dy === 0) continue;
 
-        //             const targetX = piece.position.x + dx;
-        //             const targetY = piece.position.y + dy;
+                    const targetX = piece.position.x + dx;
+                    const targetY = piece.position.y + dy;
 
-        //             if (
-        //                 targetX < 0 ||
-        //                 targetX >= 8 ||
-        //                 targetY < 0 ||
-        //                 targetY >= 8
-        //             )
-        //                 continue;
+                    if (
+                        targetX < 0 ||
+                        targetX >= 8 ||
+                        targetY < 0 ||
+                        targetY >= 8
+                    )
+                        continue;
 
-        //             const result = referee.isValidMove(
-        //                 piece.position,
-        //                 { x: targetX, y: targetY },
-        //                 piece.type,
-        //                 piece.team,
-        //                 allPieces
-        //             );
+                    const result = referee.isValidMove(
+                        piece.position,
+                        { x: targetX, y: targetY },
+                        piece.type,
+                        piece.team,
+                        allPieces
+                    );
 
-        //             if (result.success) return true;
-        //         }
-        //     }
-        // }
+                    if (result.success) return true;
+                }
+            }
+        }
         return true;
     };
 
