@@ -1,200 +1,163 @@
 /* eslint-disable react-hooks/rules-of-hooks */
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-    BOARD_SIZE,
     HORIZONTAL_AXIS,
     initialBoardState,
     Piece,
-    Position,
     samePosition,
     TeamType,
     TILE_SIZE,
     VERTICAL_AXIS,
-} from '../../Constants.ts'; // Adjust path as needed
-import { GlobleContext } from '../../context/Context.tsx'; // Adjust path as needed
-import {
-    GameStatePayload,
-    GameStatus,
-    Message,
-    PrivateRoomMessage,
-} from '../../context/types.ts';
-import Referee from '../../referee/Referee.ts'; // Adjust path as needed
+} from '../../Constants';
+import { GameStatePayload } from '../../context/types';
+import { useDragAndDrop } from '../../hooks/useDragAndDrop';
+import { useGameState } from '../../hooks/useGameState';
+import { useSignalRConnection } from '../../hooks/useSignalRConnection';
+import Referee from '../../referee/Referee';
 import {
     findAllMandatoryCaptures,
     hasMoreCaptures,
     updatePiecesAfterMove,
-} from '../../referee/rules/GeneralRules.ts'; // Adjust path as needed
-import GameOverModal from '../Modals/GameOverModal.tsx';
-import Tile from '../Tile/Tile.tsx'; // Adjust path as needed
+} from '../../referee/rules/GeneralRules';
+import GameOverModal from '../Modals/GameOverModal';
+import Tile from '../Tile/Tile';
 import './Chessboard.css';
-
-// --- Data Structures for State Synchronization ---
-
-// Payload containing the full game state sent over SignalR
-
-// --- Chessboard Component ---
 
 export default function Chessboard() {
     const chessboardRef = useRef<HTMLDivElement>(null);
-    const [activePiece, setActivePiece] = useState<HTMLElement | null>(null);
-    const [grabPosition, setGrabPosition] = useState<Position>({
-        x: -1,
-        y: -1,
-    });
-    const [pieces, setPieces] = useState<Piece[]>(initialBoardState);
-    const [mandatoryCaptures, setMandatoryCaptures] = useState<Position[]>([]);
-    const [isMultipleCapture, setIsMultipleCapture] = useState(false); // Tracks if current player is in mid-multi-capture
-    const [lastMovedPiece, setLastMovedPiece] = useState<Piece | null>(null); // For multi-capture UI constraint
-    const [currentMessage, setCurrentMessage] = useState<string | null>(null);
-    const [isGameOver, setIsGameOver] = useState(false);
-    const [showRestartButton, setShowRestartButton] = useState(false);
-    const [gameWinner, setGameWinner] = useState<string | null>(null);
-    // --- SignalR Integration & User Info ---
-    // Add this state near your other state declarations
-    const [shouldCloseRoom, setShouldCloseRoom] = useState(false);
+    const referee = new Referee();
 
+    // Use custom hooks
+    const { gameState, updateGameState, resetGame, handleOpponentStateUpdate } =
+        useGameState();
     const {
-        userState: { username },
-        signalRState: { signalRService, privateRoomInitiated, privateRoomMsg },
-    } = useContext(GlobleContext);
+        dragState,
+        startDragging,
+        stopDragging,
+        updateDragPosition,
+        calculateGrabPosition,
+        calculateDropPosition,
+    } = useDragAndDrop();
+    const {
+        username,
+        privateRoomInitiated,
+        privateRoomMsg,
+        sendGameState,
+        requestRestart,
+        closeRoom,
+        getOpponentUsername,
+    } = useSignalRConnection();
 
+    const opponentUsername = getOpponentUsername();
     const myTeamType =
-        privateRoomInitiated && privateRoomInitiated.requested === username
+        privateRoomInitiated?.requested === username
             ? TeamType.OUR
             : TeamType.OPPONENT;
-    const opponentUsername =
-        privateRoomInitiated && myTeamType === TeamType.OUR
-            ? privateRoomInitiated.accepted
-            : privateRoomInitiated?.requested;
-
-    const [currentTeam, setCurrentTeam] = useState<TeamType>(TeamType.OUR);
 
     // Effect for initialization and handling room changes
     useEffect(() => {
-        console.log('Room initialized or changed. Resetting board.');
-        setCurrentTeam(TeamType.OUR); // Requester (OUR) always starts
-        setCurrentMessage(null);
-        setIsGameOver(false);
-        setShowRestartButton(false);
-        setPieces(initialBoardState);
-        setMandatoryCaptures([]);
-        setIsMultipleCapture(false);
-        setLastMovedPiece(null);
-    }, [privateRoomInitiated]);
-
-    // Effect to handle incoming SignalR messages (State Updates & Restart)
-    useEffect(() => {
         if (
-            privateRoomMsg &&
-            opponentUsername &&
-            privateRoomMsg.from === opponentUsername
+            privateRoomInitiated &&
+            privateRoomInitiated.requested &&
+            privateRoomInitiated.accepted
         ) {
-            const messageData = privateRoomMsg as PrivateRoomMessage;
-            console.log('Received message from opponent:', messageData);
+            // Only reset if the room is newly initialized
+            if (
+                !gameState.pieces.length ||
+                gameState.pieces === initialBoardState
+            ) {
+                console.log('Room initialized. Setting up new game.');
+                resetGame();
 
-            if (messageData.gameState) {
-                handleOpponentStateUpdate(messageData.gameState);
-            }
-            if (messageData.restart) {
-                console.log('Opponent requested/confirmed restart.');
-                handleRestartGame(); // Reset game locally on opponent's signal
+                // Send initial game state to opponent
+                if (opponentUsername) {
+                    const initialGameState: GameStatePayload = {
+                        pieces: initialBoardState,
+                        currentTeam: TeamType.OUR,
+                        isGameOver: false,
+                        winner: null,
+                        currentMessage: null,
+                        fromPosition: { x: -1, y: -1 },
+                        toPosition: { x: -1, y: -1 },
+                        isPromoted: false,
+                    };
+                    sendGameState(initialGameState, opponentUsername);
+                }
             }
         }
-    }, [privateRoomMsg, opponentUsername]); // Rerun when message or opponent changes
+    }, [
+        privateRoomInitiated,
+        opponentUsername,
+        resetGame,
+        sendGameState,
+        gameState.pieces,
+    ]);
 
-    // --- Referee Instance ---
-    const referee = new Referee();
-
-    // --- Effect for Calculating Mandatory Captures ---
-    // This runs whenever the board state (`pieces`) or the `currentTeam` changes.
+    // Effect for handling incoming SignalR messages
     useEffect(() => {
-        if (!isGameOver) {
-            // Only calculate if game is ongoing
-            const captures = findAllMandatoryCaptures(pieces, currentTeam);
-            // Update mandatory captures based on the current authoritative state
-            setMandatoryCaptures(captures);
+        if (privateRoomMsg && opponentUsername) {
+            const messageData = privateRoomMsg;
+            if (messageData.from === opponentUsername) {
+                console.log('Received message from opponent:', messageData);
+
+                if (messageData.gameState) {
+                    handleOpponentStateUpdate(messageData.gameState);
+                }
+                if (messageData.restart) {
+                    console.log('Opponent requested/confirmed restart.');
+                    resetGame();
+                }
+            }
+        }
+    }, [
+        privateRoomMsg,
+        opponentUsername,
+        handleOpponentStateUpdate,
+        resetGame,
+    ]);
+
+    // Effect for calculating mandatory captures
+    useEffect(() => {
+        if (!gameState.isGameOver) {
+            const captures = findAllMandatoryCaptures(
+                gameState.pieces,
+                gameState.currentTeam
+            );
+            updateGameState({ mandatoryCaptures: captures });
             console.log(
                 `Calculated mandatory captures for ${
-                    currentTeam === myTeamType ? 'My Turn' : 'Opponent Turn'
+                    gameState.currentTeam === myTeamType
+                        ? 'My Turn'
+                        : 'Opponent Turn'
                 }:`,
                 captures
             );
         } else {
-            setMandatoryCaptures([]); // Clear highlights if game is over
+            updateGameState({ mandatoryCaptures: [] });
         }
-    }, [pieces, currentTeam, isGameOver, myTeamType]); // Dependencies for recalculation
+    }, [
+        gameState.pieces,
+        gameState.currentTeam,
+        gameState.isGameOver,
+        myTeamType,
+        updateGameState,
+    ]);
 
-    useEffect(() => {
-        if (shouldCloseRoom) {
-            console.log('Closing private room...');
-
-            const message: Message = {
-                from: username,
-                to: opponentUsername,
-                content: 'ClosePrivateRoom',
-            };
-
-            signalRService
-                ?.closePrivateRoom(message)
-                .catch((error) => {
-                    console.error('Failed to close private room:', error);
-                })
-                .finally(() => {
-                    setShouldCloseRoom(false); // Reset the state
-                });
-        }
-    }, [shouldCloseRoom, username, opponentUsername, signalRService]);
-
-    const handleLeaveRoom = () => {
-        setShouldCloseRoom(true);
-    };
-    // --- State Update Handler (Receiver Logic) ---
-    // Handles receiving the full game state from the opponent
-    const handleOpponentStateUpdate = (receivedGameState: GameStatePayload) => {
-        console.log('Applying received game state:', receivedGameState);
-
-        // --- Directly Update Local State ---
-        setPieces(receivedGameState.pieces);
-        setCurrentTeam(receivedGameState.currentTeam);
-        setIsGameOver(receivedGameState.isGameOver);
-        setCurrentMessage(receivedGameState.currentMessage); // Update game over status
-        setShowRestartButton(receivedGameState.isGameOver); // Show restart if game over
-
-        setIsMultipleCapture(false);
-        setLastMovedPiece(null);
-
-        console.log('Received game state applied successfully.');
-    };
-
-    // --- Send State Function ---
-    // Sends the full game state via SignalR
-    const sendGameStateViaSignalR = (gameState: GameStatePayload) => {
-        if (!signalRService || !opponentUsername || !username) {
-            console.error(
-                'SignalR service or user details not available for sending state.'
-            );
-            return;
-        }
-        const message: PrivateRoomMessage = {
-            from: username,
-            to: opponentUsername,
-            gameState: gameState,
-        };
-
-        console.log(gameState);
-        console.log('Sending game state:', message);
-        signalRService.sendPrivateRooMessage(message);
-    };
-
-    // --- Game Over Check Function ---
-    // Checks the game state based on pieces and whose turn it would be.
-    // Returns an object indicating if the game is over and a message.
+    // Game logic functions
     const checkGameState = (
         currentPieces: Piece[],
         teamWhoseTurnItIs: TeamType,
         username: string,
-        opponentUsername: string
-    ): GameStatus => {
+        opponentUsername: string | null
+    ) => {
+        if (!opponentUsername) {
+            return {
+                isGameOver: false,
+                message: 'Waiting for opponent...',
+                winner: null,
+            };
+        }
+
         const currentTeamPieces = currentPieces.filter(
             (p) => p.team === teamWhoseTurnItIs
         );
@@ -202,7 +165,6 @@ export default function Chessboard() {
             (p) => p.team !== teamWhoseTurnItIs
         );
 
-        // 1. Check if the opponent has any pieces left
         if (opponentTeamPieces.length === 0) {
             const winner =
                 teamWhoseTurnItIs === TeamType.OUR
@@ -215,7 +177,6 @@ export default function Chessboard() {
             };
         }
 
-        // 2. Check if the current team has any pieces left
         if (currentTeamPieces.length === 0) {
             const winner =
                 teamWhoseTurnItIs === TeamType.OUR
@@ -228,48 +189,29 @@ export default function Chessboard() {
             };
         }
 
-        // 2. Check if the current team has any valid moves
-        const referee = new Referee();
-        let hasValidMove = false;
-
-        for (const piece of currentTeamPieces) {
-            // Iterate over all possible board positions (8x8)
-            for (let dx = -2; dx <= 2; dx++) {
-                for (let dy = -2; dy <= 2; dy++) {
-                    if (dx === 0 && dy === 0) continue;
-
-                    const targetX = piece.position.x + dx;
-                    const targetY = piece.position.y + dy;
-
-                    // Skip positions out of bounds
-                    if (
-                        targetX < 0 ||
-                        targetX >= 8 ||
-                        targetY < 0 ||
-                        targetY >= 8
-                    )
-                        continue;
-
-                    const result = referee.isValidMove(
-                        piece.position,
-                        { x: targetX, y: targetY },
-                        piece.type,
-                        piece.team,
-                        currentPieces
-                    );
-
-                    result.success = true; // Force success for testing
-
-                    if (result.success) {
-                        hasValidMove = true;
-                        break;
-                    }
-                }
-                if (hasValidMove) break;
+        if (currentTeamPieces.length === 1) {
+            const lastPiece = currentTeamPieces[0];
+            const isTrapped = isPieceTrappedAgainstEdge(
+                lastPiece,
+                opponentTeamPieces
+            );
+            if (isTrapped) {
+                const winner =
+                    teamWhoseTurnItIs === TeamType.OUR
+                        ? opponentUsername
+                        : username;
+                return {
+                    isGameOver: true,
+                    message: `Game Over! ${winner} wins! (Opponent's piece is trapped against the edge)`,
+                    winner: winner,
+                };
             }
-            if (hasValidMove) break;
         }
 
+        const hasValidMove = checkForValidMoves(
+            currentTeamPieces,
+            currentPieces
+        );
         if (!hasValidMove) {
             const winner =
                 teamWhoseTurnItIs === TeamType.OUR
@@ -284,7 +226,6 @@ export default function Chessboard() {
 
         const currentTurnPlayer =
             teamWhoseTurnItIs === TeamType.OUR ? opponentUsername : username;
-        // Game continues
         return {
             isGameOver: false,
             message: `Game continues. It's ${currentTurnPlayer}'s turn.`,
@@ -292,168 +233,188 @@ export default function Chessboard() {
         };
     };
 
-    // --- Piece Interaction Functions (Sender Logic) ---
+    const checkForValidMoves = (
+        currentTeamPieces: Piece[],
+        allPieces: Piece[]
+    ): boolean => {
+        // for (const piece of currentTeamPieces) {
+        //     for (let dx = -2; dx <= 2; dx++) {
+        //         for (let dy = -2; dy <= 2; dy++) {
+        //             if (dx === 0 && dy === 0) continue;
 
-    function grabPiece(e: React.MouseEvent) {
+        //             const targetX = piece.position.x + dx;
+        //             const targetY = piece.position.y + dy;
+
+        //             if (
+        //                 targetX < 0 ||
+        //                 targetX >= 8 ||
+        //                 targetY < 0 ||
+        //                 targetY >= 8
+        //             )
+        //                 continue;
+
+        //             const result = referee.isValidMove(
+        //                 piece.position,
+        //                 { x: targetX, y: targetY },
+        //                 piece.type,
+        //                 piece.team,
+        //                 allPieces
+        //             );
+
+        //             if (result.success) return true;
+        //         }
+        //     }
+        // }
+        return true;
+    };
+
+    const isPieceTrappedAgainstEdge = (
+        piece: Piece,
+        opponentPieces: Piece[]
+    ): boolean => {
+        const isOnLeftEdge = piece.position.x === 0;
+        const isOnRightEdge = piece.position.x === 7;
+
+        if (!isOnLeftEdge && !isOnRightEdge) return false;
+
+        const y = piece.position.y;
+
+        if (isOnLeftEdge) {
+            const hasBlockingPieceTop = opponentPieces.some(
+                (p) => p.position.x === 1 && p.position.y === y - 1
+            );
+            const hasBlockingPieceBottom = opponentPieces.some(
+                (p) => p.position.x === 1 && p.position.y === y + 1
+            );
+            return hasBlockingPieceTop && hasBlockingPieceBottom;
+        }
+
+        if (isOnRightEdge) {
+            const hasBlockingPieceTop = opponentPieces.some(
+                (p) => p.position.x === 6 && p.position.y === y - 1
+            );
+            const hasBlockingPieceBottom = opponentPieces.some(
+                (p) => p.position.x === 6 && p.position.y === y + 1
+            );
+            return hasBlockingPieceTop && hasBlockingPieceBottom;
+        }
+
+        return false;
+    };
+
+    // Event handlers
+    const handleLeaveRoom = () => {
+        if (opponentUsername) {
+            closeRoom(opponentUsername);
+        }
+    };
+
+    const handleRequestRestart = () => {
+        if (opponentUsername) {
+            requestRestart(opponentUsername);
+            resetGame();
+        }
+    };
+
+    const grabPiece = (e: React.MouseEvent) => {
         const element = e.target as HTMLElement;
-        const chessboard = chessboardRef.current;
-
-        if (currentTeam !== myTeamType || !chessboard) {
-            return; // Not my turn, game over, or ref not ready
+        if (gameState.currentTeam !== myTeamType || !chessboardRef.current) {
+            return;
         }
 
         if (element.classList.contains('chess-piece')) {
-            const grabX = Math.floor(
-                (e.clientX - chessboard.offsetLeft) / TILE_SIZE
-            );
-            const grabY = Math.abs(
-                Math.ceil(
-                    (e.clientY - chessboard.offsetTop - BOARD_SIZE) / TILE_SIZE
-                )
-            );
-            const potentialGrabPos = { x: grabX, y: grabY };
-            const piece = pieces.find((p) =>
+            const potentialGrabPos = calculateGrabPosition(e, chessboardRef);
+            const piece = gameState.pieces.find((p) =>
                 samePosition(p.position, potentialGrabPos)
             );
 
-            if (!piece || piece.team !== myTeamType) return; // Not my piece
+            if (!piece || piece.team !== myTeamType) return;
 
-            // --- Mandatory & Multi-Capture Checks ---
             if (
-                mandatoryCaptures.length > 0 &&
-                !mandatoryCaptures.some((pos) =>
+                gameState.mandatoryCaptures.length > 0 &&
+                !gameState.mandatoryCaptures.some((pos) =>
                     samePosition(pos, potentialGrabPos)
                 )
             ) {
                 console.log('Must play a mandatory capture piece.');
-                return; // Must play a highlighted piece if captures exist
+                return;
             }
+
             if (
-                isMultipleCapture &&
-                lastMovedPiece &&
-                !samePosition(lastMovedPiece.position, potentialGrabPos)
+                gameState.isMultipleCapture &&
+                gameState.lastMovedPiece &&
+                !samePosition(
+                    gameState.lastMovedPiece.position,
+                    potentialGrabPos
+                )
             ) {
                 console.log('Must continue capture with the same piece.');
-                return; // In multi-capture, must use the same piece
+                return;
             }
-            // --- End Checks ---
 
-            setGrabPosition(potentialGrabPos);
-            // Position the piece for dragging
-            const mouseX = e.clientX - TILE_SIZE / 2;
-            const mouseY = e.clientY - TILE_SIZE / 2;
-            element.style.zIndex = '100';
-            element.style.position = 'absolute';
-            element.style.left = `${mouseX}px`;
-            element.style.top = `${mouseY}px`;
-            setActivePiece(element);
+            startDragging(element, potentialGrabPos);
         }
-    }
+    };
 
-    function movePiece(e: React.MouseEvent) {
-        const chessboard = chessboardRef.current;
-        if (activePiece && chessboard) {
-            const minX = chessboard.offsetLeft;
-            const minY = chessboard.offsetTop;
-            const maxX =
-                chessboard.offsetLeft + chessboard.clientWidth - TILE_SIZE;
-            const maxY =
-                chessboard.offsetTop + chessboard.clientHeight - TILE_SIZE;
-            const x = e.clientX - TILE_SIZE / 2;
-            const y = e.clientY - TILE_SIZE / 2;
-            activePiece.style.zIndex = '100';
-            activePiece.style.position = 'absolute';
-            activePiece.style.left = `${Math.max(minX, Math.min(x, maxX))}px`;
-            activePiece.style.top = `${Math.max(minY, Math.min(y, maxY))}px`;
-        }
-    }
+    const movePiece = (e: React.MouseEvent) => {
+        updateDragPosition(e, chessboardRef);
+    };
 
-    // Main function for handling player moves and updating state
-    function dropPiece(e: React.MouseEvent) {
-        const chessboard = chessboardRef.current;
-        if (!activePiece || !chessboard || currentTeam !== myTeamType) {
-            if (activePiece) {
-                // Reset piece visual if dropped improperly
-                activePiece.style.position = 'relative';
-                activePiece.style.removeProperty('top');
-                activePiece.style.removeProperty('left');
-                setActivePiece(null);
-            }
-            return; // Only process drop if it's a valid situation
+    const dropPiece = (e: React.MouseEvent) => {
+        if (
+            !dragState.activePiece ||
+            !chessboardRef.current ||
+            gameState.currentTeam !== myTeamType
+        ) {
+            stopDragging();
+            return;
         }
 
-        const x = Math.floor((e.clientX - chessboard.offsetLeft) / TILE_SIZE);
-        const y = Math.abs(
-            Math.ceil(
-                (e.clientY - chessboard.offsetTop - BOARD_SIZE) / TILE_SIZE
-            )
-        );
-        const dropPosition = { x, y };
-
-        const currentPiece = pieces.find((p) =>
-            samePosition(p.position, grabPosition)
+        const dropPosition = calculateDropPosition(e, chessboardRef);
+        const currentPiece = gameState.pieces.find((p) =>
+            samePosition(p.position, dragState.grabPosition)
         );
 
         if (currentPiece) {
-            // Validate the attempted move
             const moveResult = referee.isValidMove(
-                grabPosition,
+                dragState.grabPosition,
                 dropPosition,
                 currentPiece.type,
                 currentPiece.team,
-                pieces
+                gameState.pieces
             );
 
             if (moveResult.success) {
-                // --- Move was valid, calculate the resulting state ---
-                let wasCapture = !!moveResult.capturedPiece; // Check if referee reported capture
-                // Fallback check (useful if referee logic misses something)
+                let wasCapture = !!moveResult.capturedPiece;
                 if (!wasCapture) {
-                    const pieceAtTarget = pieces.find((p) =>
+                    const pieceAtTarget = gameState.pieces.find((p) =>
                         samePosition(p.position, dropPosition)
                     );
                     if (pieceAtTarget && pieceAtTarget.team !== myTeamType)
                         wasCapture = true;
                 }
 
-                // 1. Calculate the updated pieces array
-                let updatedPieces = pieces.map((piece) => {
+                let updatedPieces = gameState.pieces.map((piece) => {
                     if (samePosition(piece.position, currentPiece.position)) {
                         return { ...piece, position: dropPosition };
                     }
                     return piece;
                 });
 
-                // const isPromoted =
-                //     pieces.some(
-                //         (p) =>
-                //             samePosition(p.position, grabPosition) && // Фігура на попередній позиції
-                //             p.type !== PieceType.KING // Вона не була дамкою
-                //     ) &&
-                //     updatedPieces.some(
-                //         (p) =>
-                //             samePosition(p.position, dropPosition) && // Фігура на новій позиції
-                //             p.type === PieceType.KING // Вона стала дамкою
-                //     );
-                const isPromoted = false;
-
-                // Remove the captured piece
                 if (moveResult.capturedPiece) {
                     updatedPieces = updatedPieces.filter(
                         (p) =>
                             !samePosition(p.position, moveResult.capturedPiece!)
                     );
                 } else if (wasCapture) {
-                    // Handle fallback capture check
                     updatedPieces = updatedPieces.filter(
                         (p) => !samePosition(p.position, dropPosition)
                     );
                 }
-                // Apply any post-move updates (like promotion)
+
                 updatedPieces = updatePiecesAfterMove(updatedPieces);
 
-                // 2. Determine whose turn it is NEXT
-                let nextTeam = currentTeam; // Assume turn continues (for multi-capture)
+                let nextTeam = gameState.currentTeam;
                 const opponentTeam =
                     myTeamType === TeamType.OUR
                         ? TeamType.OPPONENT
@@ -465,31 +426,21 @@ export default function Chessboard() {
                         dropPosition,
                         currentPiece.team,
                         updatedPieces,
-                        currentPiece.type // TODO: Check promoted type
+                        currentPiece.type
                     );
                     if (!moreCapturesAvailable) {
-                        nextTeam = opponentTeam; // Switch turn if no more captures
+                        nextTeam = opponentTeam;
                     }
-                    // If moreCapturesAvailable is true, nextTeam remains myTeamType
                 } else {
-                    nextTeam = opponentTeam; // Normal move, switch turn
+                    nextTeam = opponentTeam;
                 }
 
-                // 3. Check if the game ended with this move
                 const gameStateResult = checkGameState(
                     updatedPieces,
-                    currentTeam,
+                    gameState.currentTeam,
                     username,
                     opponentUsername
                 );
-
-                setIsGameOver(gameStateResult.isGameOver);
-                setCurrentMessage(gameStateResult.message);
-                if (gameStateResult.isGameOver && gameStateResult.winner) {
-                    setGameWinner(gameStateResult.winner);
-                } else {
-                    setGameWinner(null);
-                }
 
                 const gameStatePayload: GameStatePayload = {
                     pieces: updatedPieces,
@@ -497,57 +448,51 @@ export default function Chessboard() {
                     isGameOver: gameStateResult.isGameOver,
                     winner: gameStateResult.winner,
                     currentMessage: gameStateResult.message,
-                    fromPosition: grabPosition,
+                    fromPosition: dragState.grabPosition,
                     toPosition: dropPosition,
-                    isPromoted: isPromoted,
+                    isPromoted: false,
                 };
 
-                sendGameStateViaSignalR(gameStatePayload);
-
-                setPieces(updatedPieces);
-                setCurrentTeam(nextTeam);
-                setCurrentMessage(gameStateResult.message);
-                setIsGameOver(gameStateResult.isGameOver);
-                setShowRestartButton(isGameOver);
-
-                // Update local multi-capture UI state *after* main state updates
-                if (
-                    nextTeam === myTeamType &&
-                    wasCapture &&
-                    moreCapturesAvailable &&
-                    !gameStateResult.isGameOver
-                ) {
-                    console.log('Setting local multi-capture state: TRUE');
-                    setIsMultipleCapture(true);
-                    // Mandatory captures useEffect will update based on new pieces/turn,
-                    // but we set lastMovedPiece to constrain the *next* grabPiece
-                    setLastMovedPiece({
-                        ...currentPiece,
-                        position: dropPosition,
-                    });
-                    // We set mandatoryCaptures here directly for immediate UI feedback if needed
-                    setMandatoryCaptures([dropPosition]);
-                } else {
-                    console.log('Setting local multi-capture state: FALSE');
-                    setIsMultipleCapture(false);
-                    setLastMovedPiece(null);
-                    // Mandatory captures will be updated by the useEffect based on the new state
+                if (opponentUsername) {
+                    sendGameState(gameStatePayload, opponentUsername);
                 }
+
+                updateGameState({
+                    pieces: updatedPieces,
+                    currentTeam: nextTeam,
+                    currentMessage: gameStateResult.message,
+                    isGameOver: gameStateResult.isGameOver,
+                    showRestartButton: gameStateResult.isGameOver,
+                    gameWinner: gameStateResult.winner,
+                    isMultipleCapture:
+                        nextTeam === myTeamType &&
+                        wasCapture &&
+                        moreCapturesAvailable &&
+                        !gameStateResult.isGameOver,
+                    lastMovedPiece:
+                        nextTeam === myTeamType &&
+                        wasCapture &&
+                        moreCapturesAvailable &&
+                        !gameStateResult.isGameOver
+                            ? { ...currentPiece, position: dropPosition }
+                            : null,
+                });
             } else {
-                // Invalid move - revert visual position
                 console.log('Invalid move.');
-                activePiece.style.position = 'relative';
-                activePiece.style.removeProperty('top');
-                activePiece.style.removeProperty('left');
+                // Reset the piece's position to its original position
+                if (dragState.activePiece) {
+                    dragState.activePiece.style.position = 'relative';
+                    dragState.activePiece.style.removeProperty('top');
+                    dragState.activePiece.style.removeProperty('left');
+                    dragState.activePiece.style.removeProperty('z-index');
+                }
             }
         }
+        stopDragging();
+    };
 
-        // Reset active piece after processing drop
-        setActivePiece(null);
-    }
-
-    // --- Touch Handlers ---
-    function handleTouchStart(e: React.TouchEvent) {
+    // Touch handlers
+    const handleTouchStart = (e: React.TouchEvent) => {
         if (e.touches.length === 1) {
             const touch = e.touches[0];
             const mouseEvent = {
@@ -556,12 +501,12 @@ export default function Chessboard() {
                 target: e.target,
             } as unknown as React.MouseEvent;
             grabPiece(mouseEvent);
-            e.preventDefault(); // Prevent default touch behavior like scrolling
+            e.preventDefault();
         }
-    }
-    function handleTouchMove(e: React.TouchEvent) {
-        if (e.touches.length === 1 && activePiece) {
-            // Only move if a piece is active
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (e.touches.length === 1 && dragState.activePiece) {
             const touch = e.touches[0];
             const mouseEvent = {
                 clientX: touch.clientX,
@@ -569,12 +514,12 @@ export default function Chessboard() {
                 target: e.target,
             } as unknown as React.MouseEvent;
             movePiece(mouseEvent);
-            e.preventDefault(); // Prevent scrolling while dragging
+            e.preventDefault();
         }
-    }
-    function handleTouchEnd(e: React.TouchEvent) {
-        if (e.changedTouches.length === 1 && activePiece) {
-            // Only process if a piece was active
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        if (e.changedTouches.length === 1 && dragState.activePiece) {
             const touch = e.changedTouches[0];
             const mouseEvent = {
                 clientX: touch.clientX,
@@ -582,68 +527,31 @@ export default function Chessboard() {
                 target: e.target,
             } as unknown as React.MouseEvent;
             dropPiece(mouseEvent);
-            // No preventDefault needed here usually
-        } else if (activePiece) {
-            // If touch ends unexpectedly or without a piece active (e.g., tap cancellation)
-            // Reset visual position of the piece if one was somehow active
-            activePiece.style.position = 'relative';
-            activePiece.style.removeProperty('top');
-            activePiece.style.removeProperty('left');
-            setActivePiece(null);
+        } else if (dragState.activePiece) {
+            stopDragging();
         }
-    }
-
-    // --- Restart Logic ---
-    const handleRequestRestart = () => {
-        if (!signalRService || !opponentUsername || !username) return;
-        const message: PrivateRoomMessage = {
-            from: username,
-            to: opponentUsername,
-            restart: true,
-        };
-        signalRService.sendPrivateRooMessage(message);
-        // Reset locally immediately. Opponent reset is handled by receiving the message.
-        handleRestartGame();
     };
 
-    const handleRestartGame = () => {
-        // Resets the game state locally
-        console.log('Restarting game locally...');
-        setPieces(initialBoardState);
-        setCurrentTeam(TeamType.OUR); // Reset to default starting player
-        setMandatoryCaptures([]);
-        setIsMultipleCapture(false);
-        setLastMovedPiece(null);
-        setIsGameOver(false);
-        setCurrentMessage(null);
-        setShowRestartButton(false);
-        setActivePiece(null);
-        setGrabPosition({ x: -1, y: -1 });
-    };
-
-    // --- Rendering Logic ---
+    // Render board
     const board = [];
     for (let j = VERTICAL_AXIS.length - 1; j >= 0; j--) {
         for (let i = 0; i < HORIZONTAL_AXIS.length; i++) {
             const currentPos = { x: i, y: j };
-            const piece = pieces.find((p) =>
+            const piece = gameState.pieces.find((p) =>
                 samePosition(p.position, currentPos)
             );
             const image = piece ? piece.image : undefined;
-            const number = j + i + 2; // For tile coloring
+            const number = j + i + 2;
 
-            // Determine if the tile should be highlighted (mandatory move)
             let isHighlighted = false;
-            if (currentTeam === myTeamType && !isGameOver) {
-                if (isMultipleCapture && lastMovedPiece) {
-                    // In multi-capture, only highlight the piece that MUST move
+            if (gameState.currentTeam === myTeamType && !gameState.isGameOver) {
+                if (gameState.isMultipleCapture && gameState.lastMovedPiece) {
                     isHighlighted = samePosition(
-                        lastMovedPiece.position,
+                        gameState.lastMovedPiece.position,
                         currentPos
                     );
-                } else if (mandatoryCaptures.length > 0) {
-                    // Otherwise, highlight any piece that has a mandatory capture
-                    isHighlighted = mandatoryCaptures.some((pos) =>
+                } else if (gameState.mandatoryCaptures.length > 0) {
+                    isHighlighted = gameState.mandatoryCaptures.some((pos) =>
                         samePosition(pos, currentPos)
                     );
                 }
@@ -651,7 +559,7 @@ export default function Chessboard() {
 
             board.push(
                 <Tile
-                    key={`${i}-${j}`} // Use standard key format
+                    key={`${i}-${j}`}
                     image={image}
                     number={number}
                     isHighlighted={isHighlighted}
@@ -660,23 +568,18 @@ export default function Chessboard() {
         }
     }
 
-    // Display text for whose turn it is or game over message
-    const turnText = isGameOver
-        ? currentMessage // Use currentMessage when the game is over
+    const turnText = gameState.isGameOver
+        ? gameState.currentMessage
         : !username || !opponentUsername
-        ? 'Connecting...' // Show connecting message if usernames are not available
-        : currentTeam === myTeamType
+        ? 'Connecting...'
+        : gameState.currentTeam === myTeamType
         ? `${username} (Your Turn)` +
-          (isMultipleCapture ? ' - Must Capture!' : '') // Show "Your Turn" with optional capture message
-        : `${opponentUsername}'s Turn`; // Show opponent's turn
+          (gameState.isMultipleCapture ? ' - Must Capture!' : '')
+        : `${opponentUsername}'s Turn`;
 
     return (
         <div className="flex flex-col items-center p-4 font-sans">
-            {' '}
-            {/* Basic styling */}
             <div className="game-info mb-2 text-lg font-semibold h-8 flex items-center justify-center text-center">
-                {' '}
-                {/* Centered text, fixed height */}
                 {turnText}
             </div>
             <div
@@ -688,29 +591,29 @@ export default function Chessboard() {
                 onTouchEnd={handleTouchEnd}
                 id="chessboard"
                 ref={chessboardRef}
-                className="touch-none" // Added touch-none to potentially help with scrolling issues
+                className="touch-none"
                 style={
                     { '--tile-size': `${TILE_SIZE}px` } as React.CSSProperties
                 }
             >
                 {board}
             </div>
-            {showRestartButton && (
+            {gameState.showRestartButton && (
                 <button
                     onClick={handleRequestRestart}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-800 transition duration-150 ease-in-out shadow active:bg-blue-900" // Added active style
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-800 transition duration-150 ease-in-out shadow active:bg-blue-900"
                 >
                     Restart Game
                 </button>
             )}
-            {isGameOver && (
+            {gameState.isGameOver && (
                 <GameOverModal
-                    open={isGameOver}
-                    winner={gameWinner}
-                    message={currentMessage || ''}
+                    open={gameState.isGameOver}
+                    winner={gameState.gameWinner}
+                    message={gameState.currentMessage || ''}
                     onRestart={handleRequestRestart}
                     onClose={handleLeaveRoom}
-                    onLeaveRoom={handleLeaveRoom} 
+                    onLeaveRoom={handleLeaveRoom}
                 />
             )}
         </div>
